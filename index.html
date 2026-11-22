@@ -230,6 +230,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
           <ul>
             <li><span class="kbd">P</span> draw a board (click-drag). Snaps to the grid, corners and faces. Grid units at the top: 1", 0.1", cm, mm.</li>
             <li><span class="kbd">V</span> select. Drag a board's <b>end</b> to stretch it (joined ends follow; <span class="kbd">Shift</span> = that end only), its <b>middle</b> to move it, anywhere else to slide it sideways. It clicks to square / 45° only right on the line; nudge sideways to leave it, or hold <span class="kbd">Alt</span> to turn the angle snap off.</li>
+            <li><span class="kbd">C</span> curved board (bent ply): click its start, click its end, move to bend it and click. Drag the square end handles or the round bend handle to reshape it; select it to set an exact radius.</li>
             <li><span class="kbd">D</span> driver: click a board to mount it. <span class="kbd">F</span> flips it. Right-click it for front/rear mounting.</li>
             <li>Right-click a corner to change how two boards join.</li>
             <li><b>Design</b> panel (right side): the <b>cabinet width</b> slider (driver + 1" to 2 × the driver), board thickness, floor / wall / corner loading.</li>
@@ -1625,12 +1626,59 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function doUndo() { if (!undo.length) return; redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = []; changed(); renderSnap(); }
   function doRedo() { if (!redo.length) return; undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = []; changed(); renderSnap(); }
   const nid = () => (design.seq = (design.seq || 0) + 1);
+  // ---------------------------------------------------------------- curved boards (bent-ply arcs)
+  // design.arcs = [{ id, a, m, b }]: a and b are the ends of the board's centre-line, m a point it passes through.
+  // Each arc is turned into short straight segments (design.panels with p.arc = arc id), about one every 7.5 degrees,
+  // so the air paths, chambers, collisions and the simulation treat it like any other board.
+  function circle3(a, m, b) {
+    const d = 2 * (a.x * (m.y - b.y) + m.x * (b.y - a.y) + b.x * (a.y - m.y));
+    if (Math.abs(d) < 1e-6) return null;
+    const a2 = a.x * a.x + a.y * a.y, m2 = m.x * m.x + m.y * m.y, b2 = b.x * b.x + b.y * b.y;
+    const x = (a2 * (m.y - b.y) + m2 * (b.y - a.y) + b2 * (a.y - m.y)) / d, y = (a2 * (b.x - m.x) + m2 * (a.x - b.x) + b2 * (m.x - a.x)) / d;
+    const r = Math.hypot(a.x - x, a.y - y);
+    return r > 1e5 ? null : { x, y, r };
+  }
+  function arcGeom(arc) {
+    const c = circle3(arc.a, arc.m, arc.b);
+    if (!c) return { c: null, t0: 0, sweep: 0, len: Math.hypot(arc.b.x - arc.a.x, arc.b.y - arc.a.y) };
+    const norm = (v) => { while (v <= -Math.PI) v += 2 * Math.PI; while (v > Math.PI) v -= 2 * Math.PI; return v; };
+    const t0 = Math.atan2(arc.a.y - c.y, arc.a.x - c.x);
+    let sw = norm(Math.atan2(arc.b.y - c.y, arc.b.x - c.x) - t0); const sm = norm(Math.atan2(arc.m.y - c.y, arc.m.x - c.x) - t0);
+    if (!(Math.sign(sm) === Math.sign(sw) && Math.abs(sm) < Math.abs(sw))) sw = sw > 0 ? sw - 2 * Math.PI : sw + 2 * Math.PI;   // the way round that passes m
+    return { c, t0, sweep: sw, len: Math.abs(sw) * c.r };
+  }
+  function arcPts(arc) {
+    const g = arcGeom(arc);
+    if (!g.c) return [{ ...arc.a }, { ...arc.b }];
+    const n = Math.max(2, Math.min(48, Math.ceil(Math.abs(g.sweep) / (7.5 * Math.PI / 180))));
+    const out = [];
+    for (let i = 0; i <= n; i++) { const t = g.t0 + g.sweep * i / n; out.push({ x: g.c.x + g.c.r * Math.cos(t), y: g.c.y + g.c.r * Math.sin(t) }); }
+    out[0] = { ...arc.a }; out[n] = { ...arc.b };
+    return out;
+  }
+  /** the point halfway round an arc (where its bend handle sits) */
+  function arcMid(arc) { const g = arcGeom(arc); if (!g.c) return { x: (arc.a.x + arc.b.x) / 2, y: (arc.a.y + arc.b.y) / 2 }; const t = g.t0 + g.sweep / 2; return { x: g.c.x + g.c.r * Math.cos(t), y: g.c.y + g.c.r * Math.sin(t) }; }
+  const rr2 = (v) => Math.round(v * 100) / 100;
+  function syncArcsIn(d) {
+    const arcs = d.arcs || [], live = new Set(arcs.map((a) => a.id));
+    if (d.panels.some((q) => q.arc && !live.has(q.arc))) d.panels = d.panels.filter((q) => !q.arc || live.has(q.arc));
+    for (const arc of arcs) {
+      const pts = arcPts(arc);
+      let segs = d.panels.filter((q) => q.arc === arc.id).sort((u, v) => u.seg - v.seg);
+      if (segs.length !== pts.length - 1) {
+        d.panels = d.panels.filter((q) => q.arc !== arc.id); segs = [];
+        for (let i = 0; i < pts.length - 1; i++) { const q = { id: (d.seq = (d.seq || 0) + 1), arc: arc.id, seg: i }; segs.push(q); d.panels.push(q); }
+      }
+      segs.forEach((q, i) => { q.x1 = rr2(pts[i].x); q.y1 = rr2(pts[i].y); q.x2 = rr2(pts[i + 1].x); q.y2 = rr2(pts[i + 1].y); q.t = arc.t || undefined; q.role = arc.role || undefined; });
+    }
+  }
+  const ARC = (d, ax, ay, mx, my, bx, by) => { (d.arcs = d.arcs || []).push({ id: ++d.seq, a: { x: ax, y: ay }, m: { x: mx, y: my }, b: { x: bx, y: by } }); };
   function nextPathName() { const used = new Set(design.paths.map((p) => p.name)); for (let i = 0; i < 26; i++) { const n = String.fromCharCode(65 + i); if (!used.has(n)) return n; } return 'P' + nid(); }
 
   // ---------------------------------------------------------------- presets
   function baseDesign(name) {
     return { name, W: 500, t: 18, snap: 'in01', showLabels: true, material: 'birch', space: 1, eg: 2.83, ref1W: true, losses: false, QL: 7,
-      xover: { on: true, lp: 100, hp: 0 }, panels: [], boundaries: [], paths: [], drivers: [], custom: {}, seq: 0, driverKey: DEFAULT_DRIVER, autoCenter: true, autoPaths: true, autoMute: [] };
+      xover: { on: true, lp: 100, hp: 0 }, panels: [], arcs: [], boundaries: [], paths: [], drivers: [], custom: {}, seq: 0, driverKey: DEFAULT_DRIVER, autoCenter: true, autoPaths: true, autoMute: [] };
   }
   function P(d, x1, y1, x2, y2) { d.panels.push({ id: ++d.seq, x1, y1, x2, y2 }); }
   function shell(d, x0, y0, x1, y1, opts = {}) { // inner rectangle, panels outside it
@@ -1663,6 +1711,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     for (const q of d.drivers) { [q.x, q.y] = T(q.x, q.y); [q.nx, q.ny] = N(q.nx, q.ny); if (q.mount && flip) q.mount.side = -q.mount.side; }
     for (const q of d.paths || []) { q.pts = q.pts.map((v) => { const [x, y] = T(v.x, v.y); return { x, y }; }); if (q.opening) { const [x, y] = T(q.opening.x, q.opening.y); q.opening = { x, y }; } }
     (d.boundaries || []).forEach((b) => { [b.x1, b.y1] = T(b.x1, b.y1); [b.x2, b.y2] = T(b.x2, b.y2); });
+    (d.arcs || []).forEach((g) => { for (const k of ['a', 'm', 'b']) { const [x, y] = T(g[k].x, g[k].y); g[k] = { x, y }; } });
     d.joints = {};   // joint overrides were keyed to the old orientation; let them re-derive
   }
   function makePreset(kind) {
@@ -1795,8 +1844,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       // lengths, flare angles). 760 deep x 1220 high x 800 wide (764 inside), 18 mm birch ply, 36 mm double front baffle.
       // The driver's rear fires into the lined chamber behind the baffle, the horn runs up the central channel, over the
       // wedge (under the 45 deg corner board), down the back and round the 550 mm quarter-circle scoop to the 639 mm mouth at
-      // the bottom front. Mogale: horn length 2.22 m, cutoff 38 Hz, high-pass at ~30 Hz. Braces are omitted; the curved
-      // scoop is drawn as six straight pieces.
+      // the bottom front. Mogale: horn length 2.22 m, cutoff 38 Hz, high-pass at ~30 Hz. Braces are omitted.
       d.W = 764; d.panels = []; d.seq = 0;
       P(d, 0, 1211, 760, 1211); P(d, 0, 9, 760, 9); P(d, 751, 1202, 751, 18);   // top, bottom, back
       P(d, 18, 1202, 18, 657); d.panels[d.panels.length - 1].t = 36;            // double front baffle (mouth below it)
@@ -1804,7 +1852,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       P(d, 240, 1089, 353, 1202); P(d, 630, 1202, 742, 1092);                    // 45 deg corner deflectors (152, 158)
       P(d, 448, 1028, 464, 620); P(d, 545, 1023, 473, 620); P(d, 448, 1028, 545, 1023);   // wedge (405, 406, cap)
       P(d, 36, 657, 250, 532); P(d, 250, 532, 466, 620);                         // the V (260, 228)
-      P(d, 733.0, 532.0, 716.5, 401.3); P(d, 716.5, 401.3, 668.3, 279.5); P(d, 668.3, 279.5, 591.5, 174.9); P(d, 591.5, 174.9, 491.5, 94.7); P(d, 491.5, 94.7, 375.0, 44.2); P(d, 375.0, 44.2, 250.0, 27.0);   // the scoop
+      ARC(d, 733, 532, 591.5, 174.9, 250, 27);   // the 550 mm scoop, one bent-ply arc
       const kpd = ['WinISD:PrecisionDevices PD.1850'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = kpd;
       d.drivers.push({ id: ++d.seq, x: 18, y: 960, nx: -1, ny: 0, key: kpd, n: 1, wiring: 'parallel' });
@@ -1819,7 +1867,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       P(d, 312, 1192, 422, 1302); P(d, 667, 1302, 780, 1189);                  // 45 deg corner deflectors
       P(d, 480, 1114, 490, 653); P(d, 591, 1116, 500, 653); P(d, 480, 1114, 591, 1116);   // wedge
       P(d, 36, 700, 287, 567); P(d, 287, 567, 495, 653);                       // the V
-      P(d, 771.1, 528.9, 744.7, 406.4); P(d, 744.7, 406.4, 691.9, 292.8); P(d, 691.9, 292.8, 615.4, 193.5); P(d, 615.4, 193.5, 518.9, 113.6); P(d, 518.9, 113.6, 407.2, 56.9); P(d, 407.2, 56.9, 285.7, 26.2);   // the 574 mm scoop, in six pieces
+      ARC(d, 771.1, 528.9, 615.4, 193.5, 285.7, 26.2);   // the 574 mm scoop, one bent-ply arc
       const k21 = ['WinISD:Precision Devices PD.2150'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = k21;
       d.drivers.push({ id: ++d.seq, x: 18, y: 1028, nx: -1, ny: 0, key: k21, n: 1, wiring: 'parallel' });
@@ -1962,6 +2010,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         peq: [{ on: true, type: 'pk', f: 33, g: 3, q: 3 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
     }
     if (['th', 'flh', 'vented', 'sealed', 'blank'].includes(kind)) d.W = widthRange(d).def;   // starting templates: driver + 3"
+    syncArcsIn(d);
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });
@@ -2190,7 +2239,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
    *  keeping joints joined. One weighted least-squares solve (angles, corner joints and T-joints are stiff
    *  constraints, original positions are soft), then rounding. Returns { moved, angErr, boards }. */
   function quantizeIn(d, mm = 1, deg = 5) {
-    const segs = [...d.panels, ...(d.boundaries || [])];
+    (d.arcs || []).forEach((g) => { for (const k of ['a', 'm', 'b']) g[k] = { x: Math.round(g[k].x / mm) * mm, y: Math.round(g[k].y / mm) * mm }; });   // curved boards: ends and bend on the grid
+    const segs = [...d.panels.filter((q) => !q.arc), ...(d.boundaries || [])];
     const N = segs.length * 2, n = 2 * N; if (!segs.length) return { moved: 0, angErr: 0, boards: 0 };
     const P0 = []; segs.forEach((q) => P0.push([q.x1, q.y1], [q.x2, q.y2]));
     const M = Array.from({ length: n }, () => new Float64Array(n)), r = new Float64Array(n);
@@ -2268,6 +2318,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const S = (x, y) => [x0 + (x - x0) * k, y0 + (y - y0) * k];
     for (const p of d.panels) { [p.x1, p.y1] = S(p.x1, p.y1); [p.x2, p.y2] = S(p.x2, p.y2); }
     for (const b of d.boundaries) { [b.x1, b.y1] = S(b.x1, b.y1); [b.x2, b.y2] = S(b.x2, b.y2); }
+    for (const g of d.arcs || []) for (const k of ['a', 'm', 'b']) { const [x, y] = S(g[k].x, g[k].y); g[k] = { x, y }; }
     for (const q of d.drivers) { [q.x, q.y] = S(q.x, q.y); }
     for (const pa of d.paths) pa.pts = pa.pts.map((v) => { const [x, y] = S(v.x, v.y); return { x, y }; });
     if (d.autoPaths) { const found = HG.autoPaths(d); const manual = d.paths.filter((q) => !q.auto); d.paths = [...manual, ...found.map((a, i) => ({ id: 9000 + i, name: String.fromCharCode(65 + i), pts: a.pts, loss: 1, auto: true }))]; }
@@ -2291,7 +2342,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     if (!best) { flash('Could not tune this design by resizing.'); draw(); return; }
     commit();
     const d = scaledCopy(best.k);
-    design.panels = d.panels; design.boundaries = d.boundaries; design.paths = d.paths; design.drivers = d.drivers;
+    design.panels = d.panels; design.arcs = d.arcs || []; design.boundaries = d.boundaries; design.paths = d.paths; design.drivers = d.drivers;
     design.drivers.forEach((q) => { if (q.mount === null) delete q.mount; });
     fit(); changed();
     const sz = HG.summary(design, A);
@@ -2397,7 +2448,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const shell = new Set(['top', 'bottom', 'back', 'front']);
     const base = JSON.parse(JSON.stringify(design));
     const params = [];
-    for (const p of design.panels) if (!(keepSize && shell.has(roleOf(p)))) params.push({ kind: 'slide', id: p.id, v: 0, step: 24, lo: -260, hi: 260 });
+    for (const p of design.panels) if (!p.arc && !(keepSize && shell.has(roleOf(p)))) params.push({ kind: 'slide', id: p.id, v: 0, step: 24, lo: -260, hi: 260 });
     for (const q of design.drivers) if (q.mount) params.push({ kind: 'drv', id: q.id, v: q.mount.f, step: 0.08, lo: 0.08, hi: 0.92 });
     if (!keepSize) params.push({ kind: 'scale', v: 0, step: 0.05, lo: -0.35, hi: 0.45 });
     const [lo, hi] = targetBand();
@@ -2408,6 +2459,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       if (sc && sc.v) {
         const k = Math.exp(sc.v); let x0 = Infinity, y0 = Infinity; d.panels.forEach((p) => { x0 = Math.min(x0, p.x1, p.x2); y0 = Math.min(y0, p.y1, p.y2); });
         d.panels.forEach((p) => { p.x1 = x0 + (p.x1 - x0) * k; p.x2 = x0 + (p.x2 - x0) * k; p.y1 = y0 + (p.y1 - y0) * k; p.y2 = y0 + (p.y2 - y0) * k; });
+        (d.arcs || []).forEach((g) => { for (const kk of ['a', 'm', 'b']) g[kk] = { x: x0 + (g[kk].x - x0) * k, y: y0 + (g[kk].y - y0) * k }; });
         d.boundaries.forEach((p) => { p.x1 = x0 + (p.x1 - x0) * k; p.x2 = x0 + (p.x2 - x0) * k; p.y1 = y0 + (p.y1 - y0) * k; p.y2 = y0 + (p.y2 - y0) * k; });
         d.paths.forEach((pa) => { pa.pts = pa.pts.map((v) => ({ x: x0 + (v.x - x0) * k, y: y0 + (v.y - y0) * k })); });
       }
@@ -2437,7 +2489,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     let order = [], oi = 0, improved = false, shown = 0;
     const MAX = 420, t0 = performance.now();
     const status = () => { const el = $('tuneStatus'); if (el) el.textContent = `Trying designs… ${tuneJob.evals} tried · target miss ${isFinite(start.err) ? start.err.toFixed(2) : '–'} → ${isFinite(cur.err) ? cur.err.toFixed(2) : '–'} dB${cur.pen ? ' (+penalties)' : ''}`; };
-    const show = () => { const d = build(x); design.panels = d.panels; design.boundaries = d.boundaries; design.paths = d.paths; design.drivers = d.drivers; changed(); shown = tuneJob.evals; };
+    const show = () => { const d = build(x); design.panels = d.panels; design.arcs = d.arcs || []; design.boundaries = d.boundaries; design.paths = d.paths; design.drivers = d.drivers; changed(); shown = tuneJob.evals; };
     const finish = (why) => {
       HG.computeJoints(design);
       show();
@@ -2550,6 +2602,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   const TOOLS = [
     { id: 'select', key: 'V', name: 'Select & move', icon: '<path d="M5 3l12 8-5 1 3 6-2 1-3-6-4 4z" fill="currentColor"/>' },
     { id: 'panel', key: 'P', name: 'Panel (3/4" board)', icon: '<rect x="3" y="9" width="18" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>' },
+    { id: 'arc', key: 'C', name: 'Curved board (bent ply)', icon: '<path d="M4 19 C5 9, 11 5, 20 5" fill="none" stroke="currentColor" stroke-width="3"/>' },
     { id: 'box', key: 'R', name: 'Box shell', icon: '<rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3"/>' },
     { id: 'path', key: 'A', name: 'Air path', icon: '<path d="M4 18 C4 6, 12 6, 12 12 S 20 18, 20 6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/><path d="M17 7l3-2 1 4" fill="none" stroke="currentColor" stroke-width="2"/>' },
     { id: 'driver', key: 'D', name: 'Driver', icon: '<path d="M4 6h3l6 4v4l-6 4H4z M13 10h4v4h-4z" fill="none" stroke="currentColor" stroke-width="2"/>' },
@@ -2559,6 +2612,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   const HINTS = {
     select: 'Drag a board end and the ends joined to it follow (Shift: that end only) · middle = move · between = slide sideways · right-click a corner (joint) or a driver (mounting) · Shift-drag box-selects · Del deletes',
     panel: 'Click-drag (or click, click) to draw a board · snaps to corners, faces and grid · X switches which face you draw · Shift frees the angle',
+    arc: 'Click the start of the curved board, click its end, then move to bend it and click · drag its ends or the round middle handle later · Esc cancels',
     box: 'Drag the outside corners of the cabinet · four boards are placed inside that outline',
     path: 'Click through the middle of the air channel from the throat/closed end to the mouth · Enter or double-click to finish · Esc cancels',
     driver: 'Click on a board to mount a driver there · it faces the side you clicked · F flips it',
@@ -2646,13 +2700,15 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const tol = 8 / view.k;
     // handles of selected things first
     for (const s of sel) {
+      if (s.t === 'arc') { const g = (design.arcs || []).find((q) => q.id === s.id); if (g) { const mm = arcMid(g); for (const [k, v] of [['a', g.a], ['b', g.b], ['m', mm]]) if (hyp(v.x - wx, v.y - wy) < tol * 1.3) return { t: 'arcpt', id: g.id, k }; } }
       if (s.t === 'panel') { const p = design.panels.find((q) => q.id === s.id); if (!p) continue; if (hyp(p.x1 - wx, p.y1 - wy) < tol) return { t: 'pend', id: p.id, end: 1 }; if (hyp(p.x2 - wx, p.y2 - wy) < tol) return { t: 'pend', id: p.id, end: 2 }; }
       if (s.t === 'boundary') { const p = design.boundaries.find((q) => q.id === s.id); if (!p) continue; if (hyp(p.x1 - wx, p.y1 - wy) < tol) return { t: 'bend', id: p.id, end: 1 }; if (hyp(p.x2 - wx, p.y2 - wy) < tol) return { t: 'bend', id: p.id, end: 2 }; }
     }
     for (const p of design.paths) for (let i = 0; i < p.pts.length; i++) if (hyp(p.pts[i].x - wx, p.pts[i].y - wy) < tol) return { t: 'vert', id: p.id, i };
     { // board / divider ends anywhere near the pointer (nearest wins, so the right end of a corner gets picked)
       let best = null;
-      for (const [t, list] of [['pend', design.panels], ['bend', design.boundaries]]) for (const p of list) for (const end of [1, 2]) {
+      for (const g of design.arcs || []) for (const k of ['a', 'b']) { const d = hyp(g[k].x - wx, g[k].y - wy); if (d < tol && (!best || d < best.d)) best = { t: 'arcpt', id: g.id, k, d }; }
+      for (const [t, list] of [['pend', design.panels.filter((q) => !q.arc)], ['bend', design.boundaries]]) for (const p of list) for (const end of [1, 2]) {
         const d = hyp((end === 1 ? p.x1 : p.x2) - wx, (end === 1 ? p.y1 : p.y2) - wy);
         if (d < tol && (!best || d < best.d)) best = { t, id: p.id, end, zone: 'end', d };
       }
@@ -2672,6 +2728,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     for (let i = design.panels.length - 1; i >= 0; i--) {
       const p = design.panels[i]; const q = HG.panelQuad({ ...p, t: (p.t || design.t) + 6 / view.k }, design.t);
       if (!HG.pointInQuad(q, wx, wy)) continue;
+      if (p.arc) return { t: 'arc', id: p.arc };
       // zones along the board: ends (free end move), centre 35–65 % (free move), the rest (slide perpendicular)
       const L = hyp(p.x2 - p.x1, p.y2 - p.y1) || 1, u = ((wx - p.x1) * (p.x2 - p.x1) + (wy - p.y1) * (p.y2 - p.y1)) / (L * L);
       const Lpx = L * view.k, endPx = Math.min(Lpx * 0.15, 40);
@@ -2720,6 +2777,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         draw(); return;
       }
       commit();
+      if (h.t === 'arcpt') { sel = [{ t: 'arc', id: h.id }]; drag = { kind: 'arcpt', id: h.id, k: h.k }; refreshSide(); draw(); return; }
+      if (h.t === 'arc') { sel = [{ t: 'arc', id: h.id }]; const g = design.arcs.find((q) => q.id === h.id); drag = { kind: 'arcmove', id: h.id, wx, wy, orig: JSON.parse(JSON.stringify(g)), moved: false }; refreshSide(); draw(); return; }
       if (h.t === 'pend' || h.t === 'bend') {
         const st = h.t === 'pend' ? 'panel' : 'boundary';
         if (!isSel(st, h.id)) { sel = [{ t: st, id: h.id }]; refreshSide(); }
@@ -2742,6 +2801,16 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       const s = snap(wx, wy);
       if (!draft) draft = { kind: tool, x1: s.x, y1: s.y, x2: s.x, y2: s.y, down: true };
       else { finishLine(); }
+      draw(); return;
+    }
+    if (tool === 'arc') {
+      if (!draft) { const s = snap(wx, wy); draft = { kind: 'arc', stage: 1, a: { x: s.x, y: s.y }, b: { x: s.x, y: s.y } }; }
+      else if (draft.stage === 1) { if (hyp(draft.b.x - draft.a.x, draft.b.y - draft.a.y) * view.k > 10) { draft.stage = 2; draft.m = { x: (draft.a.x + draft.b.x) / 2, y: (draft.a.y + draft.b.y) / 2 }; } }
+      else {
+        commit(); const g = { id: nid(), a: draft.a, m: draft.m, b: draft.b }; (design.arcs = design.arcs || []).push(g);
+        draft = null; sel = [{ t: 'arc', id: g.id }]; changed();
+        const G = arcGeom(g); flash(G.c ? `Curved board: radius ${fmtL(G.c.r)}, ${(Math.abs(G.sweep) * 180 / Math.PI).toFixed(0)}° — drag its ends or the round middle handle to reshape it.` : 'That came out straight — drag the round middle handle sideways to bend it.');
+      }
       draw(); return;
     }
     if (tool === 'box') { const s = snap(wx, wy, { noObjects: true }); draft = { kind: 'box', x1: s.x, y1: s.y, x2: s.x, y2: s.y }; return; }
@@ -2780,6 +2849,24 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         drag.loose = !!(e.shiftKey && drag.joints.length);
         snapInfo = s; liveChanged(); return;
       }
+      if (drag.kind === 'arcpt') {
+        const g = design.arcs.find((q) => q.id === drag.id); if (!g) return;
+        if (drag.k === 'm') {   // bend handle: the arc passes through the cursor
+          const s = snap(wx, wy, { noObjects: true }); g.m = { x: rr2(s.x), y: rr2(s.y) };
+        } else {
+          const excl = new Set(design.panels.filter((q) => q.arc === g.id).map((q) => q.id));
+          const mid0 = arcMid(g), s = snap(wx, wy, { exclude: excl, from: drag.k === 'a' ? g.b : g.a, free: e.altKey });
+          g[drag.k] = { x: rr2(s.x), y: rr2(s.y) }; g.m = mid0; snapInfo = s;   // ends move, the bend stays put
+        }
+        liveChanged(); return;
+      }
+      if (drag.kind === 'arcmove') {
+        const g = design.arcs.find((q) => q.id === drag.id); if (!g) return;
+        const gs = gridStep(); let dx = Math.round((wx - drag.wx) / gs) * gs, dy = Math.round((wy - drag.wy) / gs) * gs;
+        if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        for (const k of ['a', 'm', 'b']) g[k] = { x: drag.orig[k].x + dx, y: drag.orig[k].y + dy };
+        drag.moved = drag.moved || dx || dy; liveChanged(); return;
+      }
       if (drag.kind === 'vert') {
         const p = design.paths.find((q) => q.id === drag.id);
         const prev = p.pts[drag.i - 1] || p.pts[drag.i + 1];
@@ -2814,6 +2901,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     if (draft) {
       if (draft.kind === 'panel' || draft.kind === 'boundary') { const s = snap(wx, wy, { from: { x: draft.x1, y: draft.y1 }, free: e.shiftKey }); draft.x2 = s.x; draft.y2 = s.y; snapInfo = s; draw(); return; }
       if (draft.kind === 'box') { const s = snap(wx, wy, { noObjects: true }); draft.x2 = s.x; draft.y2 = s.y; draw(); return; }
+      if (draft.kind === 'arc') { if (draft.stage === 1) { const s = snap(wx, wy, { from: draft.a, free: e.shiftKey }); draft.b = { x: s.x, y: s.y }; snapInfo = s; } else { const s = snap(wx, wy, { noObjects: true }); draft.m = { x: s.x, y: s.y }; } draw(); return; }
       if (draft.kind === 'path') { const s = snap(wx, wy, { noObjects: true, from: draft.pts[draft.pts.length - 1], free: e.shiftKey }); draft.cur = s; draw(); return; }
     }
     if (tool === 'panel' || tool === 'boundary') snapInfo = snap(wx, wy); else snapInfo = null;
@@ -2833,6 +2921,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         design.drivers.forEach((p) => { if (inside(p.x, p.y)) sel.push({ t: 'driver', id: p.id }); });
         refreshSide();
       } else if (drag.kind === 'move' && !drag.moved) { undo.pop(); }
+      else if (drag.kind === 'arcmove' && !drag.moved) { undo.pop(); }
+      else if (drag.kind === 'arcpt' || drag.kind === 'arcmove') { changed(); }
       else if (drag.kind === 'perp' && !drag.moved) { undo.pop(); }
       else if (drag.kind === 'driver' && drag.bad) {
         const d = design.drivers.find((q) => q.id === drag.id);
@@ -3160,6 +3250,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     if (!sel.length) return; commit();
     for (const s of sel) {
       if (s.t === 'panel') design.panels = design.panels.filter((p) => p.id !== s.id);
+      if (s.t === 'arc') { design.arcs = (design.arcs || []).filter((g) => g.id !== s.id); design.panels = design.panels.filter((p) => p.arc !== s.id); }
       if (s.t === 'boundary') design.boundaries = design.boundaries.filter((p) => p.id !== s.id);
       if (s.t === 'path') { const gone = design.paths.find((p) => p.id === s.id); if (gone && gone.auto && gone.opening) (design.autoMute = design.autoMute || []).push(gone.opening); design.paths = design.paths.filter((p) => p.id !== s.id); }
       if (s.t === 'driver') design.drivers = design.drivers.filter((p) => p.id !== s.id);
@@ -3202,8 +3293,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     design.paths = [...manual, ...fresh];
     fresh.forEach((q) => { if (!q.name) q.name = nextPathName(); });
   }
-  function changed() { syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
-  function liveChanged() { if (liveRaf) return; liveRaf = requestAnimationFrame(() => { liveRaf = 0; syncDrivers(); if (design.autoPaths && performance.now() - lastAuto > 180 && !(drag && drag.kind === 'vert')) regenAutoPaths(); analyse(); draw(); }); }
+  function changed() { syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
+  function liveChanged() { if (liveRaf) return; liveRaf = requestAnimationFrame(() => { liveRaf = 0; syncArcsIn(design); syncDrivers(); if (design.autoPaths && performance.now() - lastAuto > 180 && !(drag && drag.kind === 'vert')) regenAutoPaths(); analyse(); draw(); }); }
   let flashTimer = null;
   function flash(msg) { const h = $('hint'); h.textContent = msg; h.style.color = 'var(--accent)'; clearTimeout(flashTimer); flashTimer = setTimeout(() => { h.style.color = ''; h.textContent = HINTS[tool]; }, 2600); }
 
@@ -3306,6 +3397,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     design.paths.forEach((p) => { if (!A || !A.paths || !A.paths.some((q) => q.src.id === p.id)) drawPolyline(p.pts, C.air, true); });
     // drivers
     for (const d of design.drivers) drawDriver(d);
+    // selected curved boards: centre-line, end handles and the round bend handle
+    for (const s0 of sel) if (s0.t === 'arc') { const g = (design.arcs || []).find((q) => q.id === s0.id); if (g) drawArcSel(g); }
     // draft
     if (draft) drawDraft();
     if (snapInfo && (tool === 'panel' || tool === 'boundary' || drag)) {
@@ -3606,8 +3699,32 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       }
     }
   }
+  function drawArcBand(pts, fill, stroke) {
+    const w = design.t * view.k;
+    ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    ctx.beginPath(); pts.forEach((v, i) => { const [x, y] = w2s(v.x, v.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    if (fill) { ctx.strokeStyle = fill; ctx.lineWidth = w; ctx.stroke(); }
+    if (stroke) { ctx.setLineDash([4, 3]); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
+    ctx.restore();
+  }
+  function drawArcSel(g) {
+    const pts = arcPts(g), G = arcGeom(g), mm = arcMid(g);
+    drawArcBand(pts, null, C.accent);
+    ctx.fillStyle = C.accent; ctx.strokeStyle = C.raised; ctx.lineWidth = 1.5;
+    for (const v of [g.a, g.b]) { const [x, y] = w2s(v.x, v.y); ctx.fillRect(x - 4.5, y - 4.5, 9, 9); ctx.strokeRect(x - 4.5, y - 4.5, 9, 9); }
+    { const [x, y] = w2s(mm.x, mm.y); ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.stroke(); }
+    if (G.c) { const [x, y] = w2s(mm.x, mm.y); tag(`R ${fmtL(G.c.r)} · ${(Math.abs(G.sweep) * 180 / Math.PI).toFixed(0)}°`, x + 12, y - 12, C.accent); }
+  }
   function drawDraft() {
     const d = draft;
+    if (d.kind === 'arc') {
+      const pts = d.stage === 1 ? [d.a, d.b] : arcPts({ a: d.a, m: d.m, b: d.b });
+      drawArcBand(pts, rgba(C.birch, 0.7), C.accent);
+      const end = pts[pts.length - 1], [x, y] = w2s(end.x, end.y);
+      if (d.stage === 1) tag(`${fmtL(hyp(d.b.x - d.a.x, d.b.y - d.a.y))} · now click the other end`, x + 12, y - 12, C.accent);
+      else { const G = arcGeom({ a: d.a, m: d.m, b: d.b }); tag(G.c ? `R ${fmtL(G.c.r)} · ${(Math.abs(G.sweep) * 180 / Math.PI).toFixed(0)}° · click to place` : 'move sideways to bend', x + 12, y - 12, C.accent); }
+      return;
+    }
     if (d.kind === 'panel') {
       let { x1, y1, x2, y2 } = d;
       if (align !== 'center') { const L = hyp(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, s = (align === 'left' ? 1 : -1) * design.t / 2; x1 += nx * s; x2 += nx * s; y1 += ny * s; y2 += ny * s; }
@@ -4071,7 +4188,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   }
   function partsList() {
     const names = partNames();
-    const rows = design.panels.map((p) => {
+    const arcRows = (design.arcs || []).map((g, i) => { const G = arcGeom(g); return `<div class="prow"><button class="pname" data-aid="${g.id}" title="Select curved board ${i + 1}">Curved board ${i + 1}</button><span class="note">${G.c ? 'R ' + fmtL(G.c.r) + ' · ' + (Math.abs(G.sweep) * 180 / Math.PI).toFixed(0) + '° · ' : ''}${fmtL(G.len)} long</span></div>`; });
+    const rows = design.panels.filter((p) => !p.arc).map((p) => {
       const L = hyp(p.x2 - p.x1, p.y2 - p.y1);
       return `<div class="prow"><button class="pname" data-pid="${p.id}" title="Select ${esc(names.get(p.id))}">${esc(names.get(p.id))}${p.role ? '' : ' <span class="auto">auto</span>'}</button>${sliderRow('pl' + p.id, '', L, gridStep(), Math.max(L * 2, L + 600), gridStep())}</div>`;
     });
@@ -4079,8 +4197,9 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       const b = driverBoard(d); if (!b) return '';
       return `<div class="prow"><button class="pname" data-did="${d.id}">Driver on ${esc(names.get(b.p.id))}</button>${sliderRow('dp' + d.id, '', b.u, 0, b.L, gridStep())}</div>`;
     });
-    return { html: rows.join('') + drows.join(''), wire: (root) => {
-      design.panels.forEach((p) => bindSlider('pl' + p.id, (v) => setPanelLength(p, v), false, root));
+    return { html: rows.join('') + arcRows.join('') + drows.join(''), wire: (root) => {
+      design.panels.filter((p) => !p.arc).forEach((p) => bindSlider('pl' + p.id, (v) => setPanelLength(p, v), false, root));
+      root.querySelectorAll('[data-aid]').forEach((b) => b.onclick = () => { sel = [{ t: 'arc', id: +b.dataset.aid }]; refreshSide(); draw(); });
       design.drivers.forEach((d) => bindSlider('dp' + d.id, (v) => setDriverPos(d, v), false, root));
       root.querySelectorAll('[data-pid]').forEach((b) => b.onclick = () => { sel = [{ t: 'panel', id: +b.dataset.pid }]; refreshSide(); draw(); });
       root.querySelectorAll('[data-did]').forEach((b) => b.onclick = () => { sel = [{ t: 'driver', id: +b.dataset.did }]; refreshSide(); draw(); });
@@ -4120,6 +4239,33 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       bindSlider('slMy', (v) => { const d = v - (p.y1 + p.y2) / 2; p.y1 = r2(p.y1 + d); p.y2 = r2(p.y2 + d); });
       $('pT').onchange = (e) => { commit(); const v = e.target.value.trim(); p.t = v ? parseL(v) : undefined; changed(); };
       $('pDel').onclick = deleteSel; return;
+    }
+    if (one && one.t === 'arc') {
+      const g = (design.arcs || []).find((q) => q.id === one.id); if (!g) { sel = []; return inspector(); }
+      const G = arcGeom(g), deg = Math.abs(G.sweep) * 180 / Math.PI, chord = hyp(g.b.x - g.a.x, g.b.y - g.a.y), tt = g.t || design.t;
+      const n = (design.arcs || []).indexOf(g) + 1, plies = Math.ceil(tt / 3);
+      h += `<h3>Curved board ${n} <span class="pill">${G.c ? 'R ' + fmtL(G.c.r) + ' · ' + deg.toFixed(0) + '°' : 'straight'}</span></h3>
+        <div class="note">Centre-line length <b>${fmtL(G.len)}</b> (the ply's bent length), chord ${fmtL(chord)}, ${fmtL(tt, isIn() ? 3 : 1)} thick × ${fmtL(design.W)} wide.
+          Make it from ${plies} × 3 mm bending ply glued over formers, or ${Math.max(2, Math.round(G.len / 150))} or more 18 mm formers cut to the curve across the width.</div>
+        ${G.c ? sliderRow('slArcR', 'Radius', G.c.r, Math.max(chord / 2 + 1, 10), Math.max(chord * 3, G.c.r * 2), gridStep()) : ''}
+        <div class="grid2"><label>Thickness (blank = ${fmtL(design.t, isIn() ? 3 : 1)}) ${numIn('arcT', g.t ? toU(g.t) : '')}</label>
+          <label>Role <select id="arcRole"><option value="">Auto</option>${HG.ROLES.map((r) => `<option value="${r}">${cap(r)}</option>`).join('')}</select></label></div>
+        <div class="row"><button id="arcFlip">Bend the other way</button><button id="arcStraight">Make it straight</button><button id="arcDel">Delete curved board</button></div>
+        <div class="note">Drag the square end handles to move its ends, the round handle to bend it, or the board itself to move it. It's simulated as ${Math.max(1, arcPts(g).length - 1)} short straight pieces.</div>`;
+      el.innerHTML = h;
+      $('arcRole').value = g.role || '';
+      $('arcRole').onchange = (e) => { commit(); g.role = e.target.value || undefined; changed(); };
+      $('arcT').onchange = (e) => { commit(); const v = e.target.value.trim(); g.t = v ? parseL(v) : undefined; changed(); };
+      const setR = (r) => {   // keep the ends, put the bend point on the same side at the new radius
+        const cx = (g.a.x + g.b.x) / 2, cy = (g.a.y + g.b.y) / 2, half = hyp(g.b.x - g.a.x, g.b.y - g.a.y) / 2; r = Math.max(r, half + 0.5);
+        const mm = arcMid(g), ux = -(g.b.y - g.a.y) / (2 * half), uy = (g.b.x - g.a.x) / (2 * half), side = Math.sign((mm.x - cx) * ux + (mm.y - cy) * uy) || 1;
+        const big = Math.abs(arcGeom(g).sweep) > Math.PI, sag = big ? r + Math.sqrt(r * r - half * half) : r - Math.sqrt(r * r - half * half);
+        g.m = { x: rr2(cx + ux * side * sag), y: rr2(cy + uy * side * sag) };
+      };
+      if (G.c) bindSlider('slArcR', setR);
+      $('arcFlip').onclick = () => { commit(); const cx = (g.a.x + g.b.x) / 2, cy = (g.a.y + g.b.y) / 2, mm = arcMid(g); g.m = { x: rr2(2 * cx - mm.x), y: rr2(2 * cy - mm.y) }; changed(); };
+      $('arcStraight').onclick = () => { commit(); design.panels.push({ id: nid(), x1: g.a.x, y1: g.a.y, x2: g.b.x, y2: g.b.y, t: g.t }); design.arcs = design.arcs.filter((q) => q.id !== g.id); sel = []; changed(); };
+      $('arcDel').onclick = deleteSel; return;
     }
     if (one && one.t === 'path') {
       const p = design.paths.find((q) => q.id === one.id); if (!p) { sel = []; return inspector(); }
@@ -4550,7 +4696,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function cutList() {
     const names = partNames();
     HG.computeJoints(design);
-    const rows = design.panels.map((p) => {
+    const rows = design.panels.filter((p) => !p.arc).map((p) => {
       const q = HG.panelQuad(p, design.t), L0 = hyp(p.x2 - p.x1, p.y2 - p.y1) || 1, nx = -(p.y2 - p.y1) / L0, ny = (p.x2 - p.x1) / L0;
       const e1 = hyp(q[1].x - q[0].x, q[1].y - q[0].y), e2 = hyp(q[2].x - q[3].x, q[2].y - q[3].y);
       const bev = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = hyp(dx, dy) || 1; return Math.round(Math.acos(Math.min(1, Math.abs(dx * nx + dy * ny) / l)) * 180 / Math.PI * 2) / 2; };
@@ -4560,8 +4706,9 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const s = A ? HG.summary(design, A) : null;
     const order = HG.ROLES;
     const lines = [...groups.values()].sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role) || b.L - a.L).map((g) => `${g.names.join(', ').padEnd(26)} ${String(g.n).padStart(2)} ×  ${fmtL(g.L, isIn() ? 3 : 1).padStart(10)}  ×  ${fmtL(design.W, isIn() ? 3 : 1)}   (${fmtL(g.t, isIn() ? 3 : 1)} board)${g.b1 || g.b2 ? `   ends cut ${g.b1}° / ${g.b2}°` : ''}`);
+    (design.arcs || []).forEach((g, i) => { const G = arcGeom(g), tt = g.t || design.t; lines.push(`${('Curved board ' + (i + 1)).padEnd(26)}  1 ×  ${fmtL(G.len, isIn() ? 3 : 1)} bent length × ${fmtL(design.W, 1)}, ${G.c ? 'radius ' + fmtL(G.c.r, 1) + ' (centre-line), ' + (Math.abs(G.sweep) * 180 / Math.PI).toFixed(0) + '°' : 'straight'} — ${Math.ceil(tt / 3)} × 3 mm bending ply over formers`); });
     if (s) lines.push('', ` 2 ×  side panels, outline ${fmtL(s.D, 1)} × ${fmtL(s.H, 1)} (trace the profile from the DXF)`);
-    const area = rows.reduce((a, r) => a + r.L * design.W, 0) / 1e6 + (s ? 2 * s.D * s.H / 1e6 : 0);
+    const area = (rows.reduce((a, r) => a + r.L * design.W, 0) + (design.arcs || []).reduce((a, g) => a + arcGeom(g).len * design.W, 0)) / 1e6 + (s ? 2 * s.D * s.H / 1e6 : 0);
     modal(`<h3 style="margin:0">Cut list · ${esc(design.name)}</h3><pre>${esc(lines.join('\n'))}</pre><div class="note">Lengths are long-point lengths after the corner joints are cut. "Ends cut" gives each end's bevel from square (0° = square cut); change a joint by right-clicking the corner. Total sheet area ≈ ${area.toFixed(2)} m² (${(area / 2.977).toFixed(2)} of a 4×8 sheet, before kerf and waste).</div>`);
   }
   function report() {
