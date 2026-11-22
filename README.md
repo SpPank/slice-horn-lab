@@ -45,6 +45,7 @@ The left side is the cabinet's **side view**. Every line you draw is a board wit
 | **D** | Driver | Click a board to mount a driver; it faces the side you clicked. **F** flips it. |
 | **B** | Divider | A line that seals off a chamber without adding wood. |
 | **0** | Fit | Zoom to fit. Wheel zooms; right-drag or Space-drag pans. |
+| **?** | Help | Opens the quick how-to panel (also the **?** button at the bottom of the toolbar). It opens by itself on your first visit. |
 | **Ctrl Z / Ctrl Shift Z** | Undo / redo | Also the Undo / Redo buttons. |
 
 **Tips**

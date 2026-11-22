@@ -44,6 +44,19 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .tools button { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; font-weight: 600; font-size: 12px; position: relative; }
 .tools button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .tools button svg { width: 20px; height: 20px; }
+.tools .helpbtn { margin-top: auto; }
+.helppanel { position: absolute; left: 0; top: 0; bottom: 0; z-index: 20; width: min(440px, 100%); display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); box-shadow: 6px 0 24px rgba(0,0,0,.28); }
+.helppanel[hidden] { display: none; }
+.helphead { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.helphead b { font-size: 14px; color: var(--ink); }
+.helphead button { width: 28px; height: 28px; padding: 0; }
+.helpbody { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.helpbody h4 { margin: 14px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.helpbody p { margin: 8px 0; }
+.helpbody ol, .helpbody ul { margin: 4px 0; padding-left: 20px; }
+.helpbody li { margin: 4px 0; }
+.helpbody .bad { color: var(--bad); }
+.helpbody a { color: var(--accent); }
 .tools hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
 .board { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 #cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block; }
@@ -187,6 +200,43 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       <canvas id="cv"></canvas>
       <div class="hud"><div class="chip hint" id="hint"></div></div>
       <div class="status" id="status"></div>
+      <div class="helppanel" id="helpPanel" hidden role="dialog" aria-label="How to use Slice Horn Lab">
+        <div class="helphead"><b>How to use Slice Horn Lab</b><button id="helpClose" aria-label="Close help" title="Close (Esc)">✕</button></div>
+        <div class="helpbody">
+          <p>Draw the cabinet's <b>side view</b> as 18 mm / ¾" boards, set the width, drop in a driver, and it simulates it with a Hornresp-style 1-D model: SPL, impedance, excursion, group delay, step response, waterfall and max SPL.</p>
+          <h4>Quick start</h4>
+          <ol>
+            <li>It opens with an 18" tapped horn so you can see how it works. <b>Start from</b> (top) has more presets.</li>
+            <li>Pick a driver at the top: filter by <b>Brand</b> and <b>Size</b>, or search by model. <b>Import driver…</b> takes a Hornresp file, WinISD .wdr or a spec sheet PDF.</li>
+            <li>Edit the cabinet here on the left. The curves update as you drag.</li>
+            <li>Read the results on the tabs above the graph (SPL, Impedance, Excursion, Group delay, Step, Decay, Max SPL…).</li>
+            <li><b>File → Download design</b> saves your work. It also auto-saves in this browser.</li>
+          </ol>
+          <h4>Drawing</h4>
+          <ul>
+            <li><span class="kbd">P</span> draw a board (click-drag). Snaps to the grid, corners and faces. Grid units at the top: 1", 0.1", cm, mm.</li>
+            <li><span class="kbd">V</span> select. Drag a board's <b>end</b> to stretch it (joined ends follow; <span class="kbd">Shift</span> = that end only), its <b>middle</b> to move it, anywhere else to slide it sideways.</li>
+            <li><span class="kbd">D</span> driver: click a board to mount it. <span class="kbd">F</span> flips it. Right-click it for front/rear mounting.</li>
+            <li>Right-click a corner to change how two boards join.</li>
+            <li><b>Design</b> panel (right side): internal width, board thickness, floor / wall / corner loading.</li>
+            <li>Air paths are found automatically. You don't need to draw them.</li>
+            <li><span class="kbd">Ctrl Z</span> undo · wheel zooms · right-drag pans · <span class="kbd">0</span> fit · <span class="kbd">?</span> this help.</li>
+          </ul>
+          <h4>Handy extras</h4>
+          <ul>
+            <li><b>Power slider</b> (left of the SPL graph, 1 W–10 kW): anything past Xmax turns <b class="bad">red</b>.</li>
+            <li><b>DSP bar</b>: HPF/LPF (Butterworth, LR, Bessel up to 48 dB/oct) + 6 PEQs, with the filter curve shown in green.</li>
+            <li><b>Target</b>: drag orange EQ-style handles to the response you want, then <b>Auto-tune re-design</b> reshapes the cabinet to match.</li>
+            <li><b>Pin curve</b> to compare before and after.</li>
+            <li><b>Quantize the build</b> (Design panel) rounds everything to whole mm and 5° angles before you cut.</li>
+            <li>Export: cut list, DXF side profile, CSV response, and the equivalent Hornresp inputs to cross-check.</li>
+            <li>Presets: 18" tapped horn (Speaker Box Maker), 1850 folded horn (Rog Mogale), SKRAM 21" (Josh Ricci), plus tapped horn / FLH / vented / sealed templates.</li>
+          </ul>
+          <h4>Limits</h4>
+          <p>It's a 1-D plane-wave model like Hornresp (checked against Hornresp exports: 0.00 dB on a front-loaded horn, ~0.05 dB on a vented box). It doesn't model panel flex, port compression or driver non-linearity, so treat the red over-excursion areas as "not actually reachable". The preset designs are traced approximations for simulation; build from the designers' own plans.</p>
+          <p class="note">Full manual and source: <a href="https://github.com/SpPank/slice-horn-lab" target="_blank" rel="noopener">github.com/SpPank/slice-horn-lab</a></p>
+        </div>
+      </div>
     </div>
     <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" tabindex="0" title="Drag to resize · double-click to reset"></div>
     <aside class="side">

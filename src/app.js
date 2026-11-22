@@ -754,11 +754,20 @@
     el.innerHTML = TOOLS.map((t) => `<button class="${tool === t.id ? 'on' : ''}" data-tool="${t.id}" title="${t.name} (${t.key})" aria-label="${t.name}"><svg viewBox="0 0 24 24">${t.icon}</svg></button>`).join('') +
       '<hr><button data-act="fit" title="Zoom to fit (0)" aria-label="Zoom to fit"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>' +
       `<button data-act="autopath" class="${design && design.autoPaths ? 'on' : ''}" title="Find air paths automatically (${design && design.autoPaths ? 'on' : 'off'})" aria-label="Automatic air paths"><svg viewBox="0 0 24 24"><path d="M4 19c3-9 6-12 16-14" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/><path d="M15 15l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="19" r="2" fill="currentColor"/></svg></button>` +
-      '<button data-act="center" title="Centre all paths in their channels" aria-label="Centre paths"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 19h18M6 12h12" stroke="currentColor" stroke-width="2"/></svg></button>';
+      '<button data-act="center" title="Centre all paths in their channels" aria-label="Centre paths"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 19h18M6 12h12" stroke="currentColor" stroke-width="2"/></svg></button>' +
+      `<button data-act="help" class="helpbtn ${helpOpen ? 'on' : ''}" title="How to use it (?)" aria-label="Help" aria-expanded="${helpOpen}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.2 9.3a2.9 2.9 0 1 1 4.3 2.5c-.9.5-1.5 1.1-1.5 2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.3" fill="currentColor"/></svg></button>`;
     el.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => setTool(b.dataset.tool));
     el.querySelector('[data-act=fit]').onclick = () => { fit(); draw(); };
     el.querySelector('[data-act=autopath]').onclick = () => { commit(); design.autoPaths = !design.autoPaths; design.autoMute = []; renderTools(); changed(); flash(design.autoPaths ? 'Air paths are found automatically from the boards.' : 'Automatic air paths off — draw paths with the path tool (A).'); };
     el.querySelector('[data-act=center]').onclick = () => { commit(); design.paths.forEach(centerPath); changed(); };
+    el.querySelector('[data-act=help]').onclick = () => setHelp(!helpOpen);
+  }
+  // ---- help panel (slides out over the left of the drawing)
+  let helpOpen = false;
+  function setHelp(on) {
+    helpOpen = !!on; $('helpPanel').hidden = !helpOpen; LS.set('shl.helpSeen', '1');
+    const b = document.querySelector('#tools [data-act=help]'); if (b) { b.classList.toggle('on', helpOpen); b.setAttribute('aria-expanded', String(helpOpen)); }
+    if (helpOpen) $('helpPanel').querySelector('.helpbody').scrollTop = 0;
   }
 
   // ---------------------------------------------------------------- snapping
@@ -1307,6 +1316,8 @@
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return; }
     if (k === ' ') { spaceDown = true; return; }
+    if (k === '?') { setHelp(!helpOpen); return; }
+    if (k === 'Escape' && helpOpen) { setHelp(false); return; }
     if (k === 'Escape') { draft = null; drag = null; if (tool !== 'select') setTool('select'); else { sel = []; refreshSide(); } draw(); return; }
     if (k === 'Enter' && draft && draft.kind === 'path') { finishPath(); return; }
     if (k === 'Delete' || k === 'Backspace') { deleteSel(); return; }
@@ -2787,6 +2798,8 @@
   mq.addEventListener ? mq.addEventListener('change', reTheme) : mq.addListener(reTheme);
   new MutationObserver(reTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   loadUserDrivers().forEach(registerUser);
+  $('helpClose').onclick = () => setHelp(false);
+  if (!LS.get('shl.helpSeen')) setTimeout(() => setHelp(true), 300);   // first visit: show how it works
   Object.values(design.custom || {}).forEach((d) => { if (d && /^user:/.test(d.k || '') && !LIBMAP.has(d.k)) registerUser({ ...d }); });
   $('drvImport').onclick = openImport;
   renderTools(); renderTabs(); setTool('select'); setPickerText(); renderSnap(); renderViewSide();
