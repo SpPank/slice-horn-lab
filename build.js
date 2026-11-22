@@ -66,6 +66,11 @@ if (fs.existsSync(mfr)) {
     }
   } catch (e) { console.warn('mfr_drivers.json not readable yet:', e.message); }
 }
+// Datasheet dimensions for drivers whose source has none (data/dims_overrides.json)
+try {
+  const ov = JSON.parse(fs.readFileSync(path.join(root, 'data', 'dims_overrides.json'), 'utf8'));
+  for (const d of lib) if (ov[d.k]) { const o = { ...ov[d.k] }; delete o._source; d.dims = { ...(d.dims || {}), ...o }; }
+} catch (e) { }
 // Impedance variants of the same driver share one frame: borrow a traced outline from a sibling (same brand, same base
 // model, same frame diameter and depth) when an entry has none of its own.
 {

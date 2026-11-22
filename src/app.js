@@ -63,7 +63,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     const t = d.t, h = t / 2;
     const drv = (x, y, nx, ny) => d.drivers.push({ id: ++d.seq, x, y, nx, ny, key, n: 1, wiring: 'parallel' });
@@ -182,6 +182,25 @@
       const k18 = ['PE:B&C 18SW115', 'PE:B&C 18SW115-4 [sheet]', 'WinISD:B&C 18SW115-4'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = k18;
       d.drivers.push({ id: ++d.seq, x: 254.2, y: 283, nx: 0.22, ny: 0.9755, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+    }
+    if (kind === 'scooper') {
+      // Super Scooper: Rog Mogale's 18" rear-loaded scoop horn, from his speakerplans.com drawings (side view, panel
+      // lengths, flare angles). 760 deep x 1220 high x 800 wide (764 inside), 18 mm birch ply, 36 mm double front baffle.
+      // The driver's rear fires into the lined chamber behind the baffle, the horn runs up the central channel, over the
+      // wedge (under the 45 deg corner board), down the back and round the 550 mm quarter-circle scoop to the 639 mm mouth at
+      // the bottom front. Mogale: horn length 2.22 m, cutoff 38 Hz, high-pass at ~30 Hz. Braces are omitted; the curved
+      // scoop is drawn as six straight pieces.
+      d.W = 764; d.panels = []; d.seq = 0;
+      P(d, 0, 1211, 760, 1211); P(d, 0, 9, 760, 9); P(d, 751, 1202, 751, 18);   // top, bottom, back
+      P(d, 18, 1202, 18, 657); d.panels[d.panels.length - 1].t = 36;            // double front baffle (mouth below it)
+      P(d, 231, 1202, 231, 717);                                                 // chamber wall (485), 186 mm behind the baffle's inner face
+      P(d, 256, 1202, 363, 1095); P(d, 630, 1202, 742, 1092);                    // 45 deg corner boards (152, 158)
+      P(d, 448, 1028, 464, 620); P(d, 545, 1023, 473, 620); P(d, 448, 1028, 545, 1023);   // wedge (405, 406, cap)
+      P(d, 36, 657, 250, 532); P(d, 250, 532, 466, 620);                         // the V (260, 228)
+      P(d, 733.0, 532.0, 716.5, 401.3); P(d, 716.5, 401.3, 668.3, 279.5); P(d, 668.3, 279.5, 591.5, 174.9); P(d, 591.5, 174.9, 491.5, 94.7); P(d, 491.5, 94.7, 375.0, 44.2); P(d, 375.0, 44.2, 250.0, 27.0);   // the scoop
+      const kpd = ['WinISD:PrecisionDevices PD.1850'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = kpd;
+      d.drivers.push({ id: ++d.seq, x: 18, y: 960, nx: -1, ny: 0, key: kpd, n: 1, wiring: 'parallel' });
     }
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });

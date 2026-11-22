@@ -1,0 +1,4 @@
+{
+  "_note": "Physical dimensions for library drivers whose source (e.g. WinISD) has none. Values from the maker's datasheet.",
+  "WinISD:PrecisionDevices PD.1850": { "outer_dia": 474, "depth_total": 192, "flange_thickness": 14.5, "_source": "Precision Devices PD.1850/3 technical specifications (overall 474 mm, 177.4 mm behind a 14.5 mm flange)" }
+}
