@@ -11,7 +11,7 @@ Nothing to install. It's one self-contained HTML page that runs entirely in your
 ## Quick start
 
 1. **Open the app.** It starts with the default project: an 18" tapped horn on a B&C 18DS115.
-2. **Change the driver** with the search box at the top (filter by **brand** and **size**), or **Import driver…** to add your own.
+2. **Change the driver** with the search box at the top (press **/**), the **Brand** and **Size** menus, or **Import driver…** to add your own.
 3. **Edit the cabinet** on the left. Drag board ends, middles or sides; the SPL curve on the right updates as you go.
 4. **Read the result** on the chart tabs (SPL, Impedance, Excursion…), the stats boxes under the chart, and the parts list.
 5. **Save it.** **File → Download design (.json)** downloads your project; **File → Open** loads it back. Your current design is also kept automatically in this browser.
@@ -126,6 +126,18 @@ On the SPL tab, the **Target** bar lets you draw the response you want:
 ## Drivers
 
 The built-in library has about 1,380 drivers: B&C, Beyma, Celestion, Eminence, Faital Pro and Lavoce 8–24" pro woofers (from Parts Express listings and manufacturer data sheets), plus your WinISD library if you build it yourself. About 175 have real outlines traced from their technical drawings, so the basket you see is the actual shape; the rest are drawn from their stated frame, cutout and depth. Ferrite drivers are drawn with a block magnet and neodymium drivers with a slim basket and compact motor, so you can tell them apart at a glance. Drivers can't overlap a board or each other: a drag that would collide turns red and snaps back.
+
+**Searching.** Click the search box (or press **/**) and type. Each word narrows the list:
+
+| Type | Finds |
+|---|---|
+| `18sw115`, `pd1850`, `kappa 15` | models and brands; case, spaces and punctuation don't matter |
+| `18"` or `18in` | that nominal size |
+| `neo` / `ferrite` | magnet type |
+| `8ohm`, `4ohm` | nominal impedance |
+| `fs<35`, `xmax>10`, `qts<0.4`, `pe>=1000` | Thiele–Small limits (also `qes`, `qms`, `vas`, `re`, `sd`, `bl`, `mms`, `le`) |
+
+Combine them: `18" neo xmax>12 fs<35`. Arrow keys move through the list and Enter picks.
 
 **Import driver…** (next to Brand) adds your own from:
 - a **Hornresp** driver or record file (including the advanced semi-inductance and frequency-dependent damping parameters),

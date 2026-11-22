@@ -34,7 +34,7 @@ header.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px
 .field { display: inline-flex; align-items: center; gap: 6px; }
 .field > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 input, select, button, textarea { font: inherit; color: var(--ink); }
-input[type=text], input[type=number], select, textarea { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
+input[type=text], input[type=search], input[type=number], select, textarea { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
 input[type=number] { width: 78px; font-family: var(--font-data); font-size: 12px; }
 input.num { width: 78px; font-family: var(--font-data); font-size: 12px; }
 button { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
@@ -134,8 +134,15 @@ table.ts td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
 table.ts td:first-child { color: var(--muted); font-family: var(--font-ui); }
 table.ts input { width: 70px; padding: 1px 4px; }
 .picker { position: relative; }
-.picker input { width: 200px; }
-.picker .list { position: absolute; z-index: 30; top: 100%; left: 0; width: 360px; max-width: 90vw; max-height: 340px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.picker .srch { position: relative; display: inline-flex; align-items: center; }
+.picker .srch svg { position: absolute; left: 8px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+.picker input { width: 250px; height: 26px; box-sizing: border-box; padding-left: 28px; -webkit-appearance: none; appearance: none; outline-offset: 0; }
+.picker input::-webkit-search-cancel-button { cursor: pointer; }
+.picker .list .pickhead.tips { text-transform: none; letter-spacing: 0; display: block; border-bottom: 1px solid var(--line); }
+.picker .list .pickhead.tips b { color: var(--ink); font-family: var(--font-data); font-weight: 500; }
+.picker .list div[data-i] > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.picker .list div.cur > span { font-weight: 600; }
+.picker .list { position: absolute; z-index: 30; top: 100%; left: 0; width: 600px; max-width: calc(100vw - 16px); max-height: 340px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .picker .list div { padding: 5px 9px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
 .picker .list div:hover, .picker .list div.hi { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 #drvImport { padding: 3px 8px; font-size: 12px; white-space: nowrap; }
@@ -186,6 +193,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   .picker input { width: 180px; }
 }
 @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .picker .list div[data-i] { flex-wrap: wrap; gap: 0 8px; } .picker .list div[data-i] > span { flex: 1 1 100%; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -197,8 +205,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     <div class="field picker" id="pickerWrap"><span>Driver</span>
       <button id="drvImport" title="Import a driver from a WinISD .wdr, a Hornresp driver/record, a spec-sheet PDF or pasted text">Import driver…</button>
       <select id="drvBrand" aria-label="Brand"><option value="">All brands</option><option value="user">User (imported)</option><option value="bc">B&amp;C</option><option value="eminence">Eminence</option><option value="faital">Faital Pro</option><option value="beyma">Beyma</option><option value="celestion">Celestion</option><option value="lavoce">Lavoce</option></select>
-      <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–21"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option></select>
-      <input type="text" id="drvSearch" placeholder="Search model…" autocomplete="off"><div class="list" id="drvList" hidden></div></div>
+      <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–24"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option><option value="24">24"</option></select>
+      <span class="srch" title="Search the driver library ( / )"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" id="drvSearch" placeholder="Search drivers: model, brand, 18&quot;, fs&lt;35…" autocomplete="off" spellcheck="false" aria-label="Search drivers"></span><div class="list" id="drvList" hidden></div></div>
     <label class="field"><span>Start from</span><select id="preset">
       <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="x1">X1 18" (Rog Mogale)</option><option value="s12bp">S12BP (B&amp;C Speakers)</option><option value="s21hl">S21HL (B&amp;C Speakers)</option><option value="s218bp">S218BP (B&amp;C Speakers)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
     </select></label>
@@ -221,7 +229,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
           <h4>Quick start</h4>
           <ol>
             <li>It opens with an 18" tapped horn so you can see how it works. <b>Start from</b> (top) has more presets.</li>
-            <li>Pick a driver at the top: filter by <b>Brand</b> and <b>Size</b>, or search by model. <b>Import driver…</b> takes a Hornresp file, WinISD .wdr or a spec sheet PDF.</li>
+            <li>Pick a driver at the top: filter by <b>Brand</b> and <b>Size</b>, or click the <b>search box</b> (or press <span class="kbd">/</span>) and type a model, brand or size. It also takes <b>neo</b>, <b>8ohm</b> and limits like <b>fs&lt;35</b>, <b>xmax&gt;10</b>, <b>qts&lt;0.4</b>. <b>Import driver…</b> takes a Hornresp file, WinISD .wdr or a spec sheet PDF.</li>
             <li>Edit the cabinet here on the left. The curves update as you drag.</li>
             <li>Read the results on the tabs above the graph (SPL, Impedance, Excursion, Group delay, Step, Decay, Max SPL…).</li>
             <li><b>File → Download design</b> saves your work. It also auto-saves in this browser.</li>
@@ -3271,6 +3279,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return; }
     if (k === ' ') { spaceDown = true; return; }
     if (k === '?') { setHelp(!helpOpen); return; }
+    if (k === '/') { e.preventDefault(); $('drvSearch').focus(); return; }
     if (k === 'Escape' && helpOpen) { setHelp(false); return; }
     if (k === 'Escape') { draft = null; drag = null; if (tool !== 'select') setTool('select'); else { sel = []; refreshSide(); } draw(); return; }
     if (k === 'Enter' && draft && draft.kind === 'path') { finishPath(); return; }
@@ -4449,26 +4458,67 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const dc = 2 * Math.sqrt((d.Sd || 0) / Math.PI) / 2.54;   // effective cone dia, inches
     return [6.5, 8, 10, 12, 15, 18, 21].reduce((a, b) => Math.abs(b * 0.82 - dc) < Math.abs(a * 0.82 - dc) ? b : a, 8);
   };
+  const squash = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');   // "B&C 18SW115-4" -> "bc18sw1154"
+  const TS_GET = { fs: (d) => d.Fs, qts: (d) => (d.Qes && d.Qms ? d.Qes * d.Qms / (d.Qes + d.Qms) : d.Qts), qes: (d) => d.Qes, qms: (d) => d.Qms, vas: (d) => d.Vas,
+    xmax: (d) => d.Xmax, pe: (d) => d.Pe, re: (d) => d.Re, sd: (d) => d.Sd, bl: (d) => d.Bl, mms: (d) => d.Mms, le: (d) => d.Le };
+  /** One search word -> a test on a driver. A word can be text (brand or model; case, spaces and punctuation don't
+   *  matter), a size (18" or 18in), an impedance (8ohm), neo / ferrite, or a T/S limit (fs<35, xmax>=10, qts<0.4, pe>1000). */
+  function searchTest(tok) {
+    let m;
+    if ((m = /^(fs|qts|qes|qms|vas|xmax|pe|re|sd|bl|mms|le)(<=|>=|<|>|=)(\d*\.?\d+)$/.exec(tok))) {
+      const get = TS_GET[m[1]], op = m[2], v = +m[3];
+      return { kind: 'ts', test: (d) => { const x = get(d); return x != null && isFinite(x) && (op === '<' ? x < v : op === '<=' ? x <= v : op === '>' ? x > v : op === '>=' ? x >= v : Math.abs(x - v) <= Math.max(0.5, v * 0.02)); } };
+    }
+    if ((m = /^(\d+(?:\.\d+)?)(?:"|”|''|in|inch)$/.exec(tok))) { const n = +m[1]; return { kind: 'size', test: (d) => Math.abs(nominal(d) - n) < 0.6 }; }
+    if ((m = /^(\d+)(?:ohms?|ω|r)$/.exec(tok))) {
+      const n = +m[1], re = new RegExp('(^|[^0-9])' + n + '\\s*Ω');
+      return { kind: 'ohm', test: (d) => re.test(d.m || '') || (!/Ω/.test(d.m || '') && d.Re >= n * 0.58 && d.Re <= n * 0.98) };
+    }
+    if (/^(neo|neodymium)$/.test(tok)) return { kind: 'mag', test: (d) => magType(d) === 'neo' };
+    if (/^(ferrite|ceramic)$/.test(tok)) return { kind: 'mag', test: (d) => magType(d) === 'ferrite' };
+    const sq = squash(tok);
+    if (!sq) return { kind: 'none', test: () => true };
+    const asSize = /^(8|10|12|15|18|21|24)$/.test(tok) ? +tok : 0;
+    return { kind: 'text', sq, test: (d) => squash(`${d.b} ${d.m} ${d.src || ''}`).includes(sq) || (asSize && Math.round(nominal(d)) === asSize) };
+  }
   function pickerList(q) {
     const seenK = new Set(), all = [...Object.values(design.custom || {}), ...LIB].filter((d) => d && !seenK.has(d.k) && seenK.add(d.k));
-    const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const tests = q.toLowerCase().replace(/\s*(<=|>=|<|>|=)\s*/g, '$1').split(/\s+/).filter(Boolean).map(searchTest);
     const brand = $('drvBrand').value, size = $('drvSize').value;
-    let res = all.filter((d) => { const s = `${d.b} ${d.m} ${d.src || ''} ${d.size || ''}`.toLowerCase(); return terms.every((t) => s.includes(t)); });
+    let res = all.filter((d) => tests.every((t) => t.test(d)));
     if (brand === 'user') res = res.filter((d) => d.user || /^User import/.test(d.src || ''));
     else if (brand) res = res.filter((d) => BRANDS[brand].test(d.b || '') && /^PE|datasheet/.test(d.src || ''));   // Parts Express + manufacturer sheets
-    if (size === 'all8') res = res.filter((d) => nominal(d) >= 8 && nominal(d) <= 21);
+    if (size === 'all8') res = res.filter((d) => nominal(d) >= 8 && nominal(d) <= 24);
     else if (size) res = res.filter((d) => Math.round(nominal(d)) === +size);
     const rank = (d) => (/^PE|datasheet/.test(d.src || '') ? 0 : /WinISD/.test(d.src || '') ? 1 : 2);
     const rank2 = (d) => (d.user ? -1 : rank(d));
-    res.sort(brand || size ? (a, b) => nominal(a) - nominal(b) || (a.m || '').localeCompare(b.m || '') : (a, b) => rank2(a) - rank2(b) || (a.b + a.m).localeCompare(b.b + b.m));
-    return res.slice(0, brand ? 400 : 80);
+    const words = tests.filter((t) => t.kind === 'text').map((t) => t.sq);
+    const rel = (d) => { if (!words.length) return 0; const mdl = squash(d.m); return words.some((w) => mdl.startsWith(w)) ? 0 : words.some((w) => mdl.includes(w)) ? 1 : 2; };   // model matches before brand / source matches
+    const byName = (a, b) => (a.b + a.m).localeCompare(b.b + b.m);
+    res.sort(brand || size || tests.some((t) => t.kind !== 'text') ? (a, b) => rel(a) - rel(b) || nominal(a) - nominal(b) || rank2(a) - rank2(b) || byName(a, b) : (a, b) => rel(a) - rel(b) || rank2(a) - rank2(b) || byName(a, b));
+    pickTotal = res.length;
+    return res.slice(0, brand || tests.length ? 400 : 80);
   }
+  let pickTotal = 0;
   let pickHi = 0, pickRes = [];
   function showPicker() {
-    pickRes = pickerList($('drvSearch').value === label(specOf(design.driverKey)) ? '' : $('drvSearch').value);
-    const el = $('drvList');
-    el.innerHTML = `<div class="pickhead">${pickRes.length} driver${pickRes.length === 1 ? '' : 's'}${$('drvBrand').value === 'user' ? ' · imported by you' + (pickRes.length ? '' : ' — use Import driver… to add one') : $('drvBrand').value ? ' · Parts Express + manufacturer sheets' : ''}</div>` + (pickRes.map((d, i) => `<div class="${i === pickHi ? 'hi' : ''}" data-i="${i}"><span>${esc(d.b)} ${esc(d.m)}${d.prof ? ' <span class="auto" title="Outline traced from the technical drawing">drawing</span>' : ''}</span><small>${nominal(d)}" · ${d.Fs ? d.Fs.toFixed(0) + ' Hz' : ''} · ${esc(d.src || '')}</small></div>`).join('') || '<div>No match</div>');
+    const q = $('drvSearch').value;
+    pickRes = pickerList(q === label(specOf(design.driverKey)) ? '' : q);
+    const el = $('drvList'), cur = specOf(design.driverKey);
+    const srcTag = (d) => (d.user || /^User import/.test(d.src || '') ? 'yours' : /spec sheet/.test(d.src || '') ? 'spec sheet' : /product page/.test(d.src || '') ? 'Parts Express' : /datasheet/.test(d.src || '') ? 'maker' : /WinISD/.test(d.src || '') ? 'WinISD' : (d.src || ''));
+    const num = (v, dp) => (v == null || !isFinite(v) ? '' : (+v).toFixed(dp));
+    const row = (d, i) => `<div class="${i === pickHi ? 'hi' : ''}${d.k === design.driverKey ? ' cur' : ''}" data-i="${i}" title="${esc(d.src || '')}"><span>${esc(d.b)} ${esc(d.m)}${d.prof ? ' <span class="auto" title="Outline traced from the technical drawing">drawing</span>' : ''}</span>` +
+      `<small>${nominal(d)}"${d.Fs ? ' · Fs ' + num(d.Fs, 0) : ''}${d.Xmax ? ' · Xmax ' + num(d.Xmax, d.Xmax < 10 ? 1 : 0) : ''}${d.Pe ? ' · ' + num(d.Pe, 0) + ' W' : ''} · ${esc(srcTag(d))}</small></div>`;
+    const more = pickTotal > pickRes.length ? ` (showing ${pickRes.length})` : '';
+    el.innerHTML = `<div class="pickhead"><span>${pickTotal} driver${pickTotal === 1 ? '' : 's'}${more}${$('drvBrand').value === 'user' ? ' · imported by you' : ''}</span><span>${cur ? 'now: ' + esc(label(cur)) : ''}</span></div>` +
+      `<div class="pickhead tips">Type a model, brand or size · also <b>18" neo</b> · <b>8ohm</b> · <b>fs&lt;35</b> · <b>xmax&gt;10</b> · <b>qts&lt;0.4</b> · <b>pe&gt;1000</b></div>` +
+      (pickRes.map(row).join('') || `<div class="pickhead">No driver matches that. Try fewer words${$('drvBrand').value || $('drvSize').value ? ', set Brand and Size back to All,' : ''} or use Import driver… to add your own.</div>`);
     el.hidden = false;
+    // drop the list straight down from the search box, kept inside the window
+    const pr = el.parentElement.getBoundingClientRect(), sr = $('drvSearch').parentElement.getBoundingClientRect(), lw = Math.min(600, innerWidth - 16);
+    el.style.left = Math.max(8 - pr.left, Math.min(sr.left - pr.left, innerWidth - 8 - lw - pr.left)) + 'px';
+    el.style.top = (sr.bottom - pr.top + 3) + 'px';
+    const hi = el.querySelector('.hi'); if (hi && hi.scrollIntoView) hi.scrollIntoView({ block: 'nearest' });
     el.querySelectorAll('[data-i]').forEach((n) => n.onmousedown = (e) => { e.preventDefault(); choose(pickRes[+n.dataset.i]); });
   }
   function choose(d) {
@@ -4481,7 +4531,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     clampWidth(true);
     $('drvList').hidden = true; setPickerText(); $('drvSearch').blur(); changed();
   }
-  $('drvSearch').addEventListener('focus', () => { $('drvSearch').select(); pickHi = 0; showPicker(); });
+  $('drvSearch').addEventListener('focus', () => { $('drvSearch').value = ''; pickHi = 0; showPicker(); });   // empty box = the placeholder says what you can type
   for (const id of ['drvBrand', 'drvSize']) $(id).addEventListener('change', () => { pickHi = 0; $('drvSearch').value = ''; $('drvSearch').focus(); showPicker(); });
   $('drvSearch').addEventListener('input', () => { pickHi = 0; showPicker(); });
   $('drvSearch').addEventListener('blur', () => setTimeout(() => { $('drvList').hidden = true; setPickerText(); }, 120));

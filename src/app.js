@@ -1688,6 +1688,7 @@
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return; }
     if (k === ' ') { spaceDown = true; return; }
     if (k === '?') { setHelp(!helpOpen); return; }
+    if (k === '/') { e.preventDefault(); $('drvSearch').focus(); return; }
     if (k === 'Escape' && helpOpen) { setHelp(false); return; }
     if (k === 'Escape') { draft = null; drag = null; if (tool !== 'select') setTool('select'); else { sel = []; refreshSide(); } draw(); return; }
     if (k === 'Enter' && draft && draft.kind === 'path') { finishPath(); return; }
@@ -2866,26 +2867,67 @@
     const dc = 2 * Math.sqrt((d.Sd || 0) / Math.PI) / 2.54;   // effective cone dia, inches
     return [6.5, 8, 10, 12, 15, 18, 21].reduce((a, b) => Math.abs(b * 0.82 - dc) < Math.abs(a * 0.82 - dc) ? b : a, 8);
   };
+  const squash = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');   // "B&C 18SW115-4" -> "bc18sw1154"
+  const TS_GET = { fs: (d) => d.Fs, qts: (d) => (d.Qes && d.Qms ? d.Qes * d.Qms / (d.Qes + d.Qms) : d.Qts), qes: (d) => d.Qes, qms: (d) => d.Qms, vas: (d) => d.Vas,
+    xmax: (d) => d.Xmax, pe: (d) => d.Pe, re: (d) => d.Re, sd: (d) => d.Sd, bl: (d) => d.Bl, mms: (d) => d.Mms, le: (d) => d.Le };
+  /** One search word -> a test on a driver. A word can be text (brand or model; case, spaces and punctuation don't
+   *  matter), a size (18" or 18in), an impedance (8ohm), neo / ferrite, or a T/S limit (fs<35, xmax>=10, qts<0.4, pe>1000). */
+  function searchTest(tok) {
+    let m;
+    if ((m = /^(fs|qts|qes|qms|vas|xmax|pe|re|sd|bl|mms|le)(<=|>=|<|>|=)(\d*\.?\d+)$/.exec(tok))) {
+      const get = TS_GET[m[1]], op = m[2], v = +m[3];
+      return { kind: 'ts', test: (d) => { const x = get(d); return x != null && isFinite(x) && (op === '<' ? x < v : op === '<=' ? x <= v : op === '>' ? x > v : op === '>=' ? x >= v : Math.abs(x - v) <= Math.max(0.5, v * 0.02)); } };
+    }
+    if ((m = /^(\d+(?:\.\d+)?)(?:"|”|''|in|inch)$/.exec(tok))) { const n = +m[1]; return { kind: 'size', test: (d) => Math.abs(nominal(d) - n) < 0.6 }; }
+    if ((m = /^(\d+)(?:ohms?|ω|r)$/.exec(tok))) {
+      const n = +m[1], re = new RegExp('(^|[^0-9])' + n + '\\s*Ω');
+      return { kind: 'ohm', test: (d) => re.test(d.m || '') || (!/Ω/.test(d.m || '') && d.Re >= n * 0.58 && d.Re <= n * 0.98) };
+    }
+    if (/^(neo|neodymium)$/.test(tok)) return { kind: 'mag', test: (d) => magType(d) === 'neo' };
+    if (/^(ferrite|ceramic)$/.test(tok)) return { kind: 'mag', test: (d) => magType(d) === 'ferrite' };
+    const sq = squash(tok);
+    if (!sq) return { kind: 'none', test: () => true };
+    const asSize = /^(8|10|12|15|18|21|24)$/.test(tok) ? +tok : 0;
+    return { kind: 'text', sq, test: (d) => squash(`${d.b} ${d.m} ${d.src || ''}`).includes(sq) || (asSize && Math.round(nominal(d)) === asSize) };
+  }
   function pickerList(q) {
     const seenK = new Set(), all = [...Object.values(design.custom || {}), ...LIB].filter((d) => d && !seenK.has(d.k) && seenK.add(d.k));
-    const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const tests = q.toLowerCase().replace(/\s*(<=|>=|<|>|=)\s*/g, '$1').split(/\s+/).filter(Boolean).map(searchTest);
     const brand = $('drvBrand').value, size = $('drvSize').value;
-    let res = all.filter((d) => { const s = `${d.b} ${d.m} ${d.src || ''} ${d.size || ''}`.toLowerCase(); return terms.every((t) => s.includes(t)); });
+    let res = all.filter((d) => tests.every((t) => t.test(d)));
     if (brand === 'user') res = res.filter((d) => d.user || /^User import/.test(d.src || ''));
     else if (brand) res = res.filter((d) => BRANDS[brand].test(d.b || '') && /^PE|datasheet/.test(d.src || ''));   // Parts Express + manufacturer sheets
-    if (size === 'all8') res = res.filter((d) => nominal(d) >= 8 && nominal(d) <= 21);
+    if (size === 'all8') res = res.filter((d) => nominal(d) >= 8 && nominal(d) <= 24);
     else if (size) res = res.filter((d) => Math.round(nominal(d)) === +size);
     const rank = (d) => (/^PE|datasheet/.test(d.src || '') ? 0 : /WinISD/.test(d.src || '') ? 1 : 2);
     const rank2 = (d) => (d.user ? -1 : rank(d));
-    res.sort(brand || size ? (a, b) => nominal(a) - nominal(b) || (a.m || '').localeCompare(b.m || '') : (a, b) => rank2(a) - rank2(b) || (a.b + a.m).localeCompare(b.b + b.m));
-    return res.slice(0, brand ? 400 : 80);
+    const words = tests.filter((t) => t.kind === 'text').map((t) => t.sq);
+    const rel = (d) => { if (!words.length) return 0; const mdl = squash(d.m); return words.some((w) => mdl.startsWith(w)) ? 0 : words.some((w) => mdl.includes(w)) ? 1 : 2; };   // model matches before brand / source matches
+    const byName = (a, b) => (a.b + a.m).localeCompare(b.b + b.m);
+    res.sort(brand || size || tests.some((t) => t.kind !== 'text') ? (a, b) => rel(a) - rel(b) || nominal(a) - nominal(b) || rank2(a) - rank2(b) || byName(a, b) : (a, b) => rel(a) - rel(b) || rank2(a) - rank2(b) || byName(a, b));
+    pickTotal = res.length;
+    return res.slice(0, brand || tests.length ? 400 : 80);
   }
+  let pickTotal = 0;
   let pickHi = 0, pickRes = [];
   function showPicker() {
-    pickRes = pickerList($('drvSearch').value === label(specOf(design.driverKey)) ? '' : $('drvSearch').value);
-    const el = $('drvList');
-    el.innerHTML = `<div class="pickhead">${pickRes.length} driver${pickRes.length === 1 ? '' : 's'}${$('drvBrand').value === 'user' ? ' · imported by you' + (pickRes.length ? '' : ' — use Import driver… to add one') : $('drvBrand').value ? ' · Parts Express + manufacturer sheets' : ''}</div>` + (pickRes.map((d, i) => `<div class="${i === pickHi ? 'hi' : ''}" data-i="${i}"><span>${esc(d.b)} ${esc(d.m)}${d.prof ? ' <span class="auto" title="Outline traced from the technical drawing">drawing</span>' : ''}</span><small>${nominal(d)}" · ${d.Fs ? d.Fs.toFixed(0) + ' Hz' : ''} · ${esc(d.src || '')}</small></div>`).join('') || '<div>No match</div>');
+    const q = $('drvSearch').value;
+    pickRes = pickerList(q === label(specOf(design.driverKey)) ? '' : q);
+    const el = $('drvList'), cur = specOf(design.driverKey);
+    const srcTag = (d) => (d.user || /^User import/.test(d.src || '') ? 'yours' : /spec sheet/.test(d.src || '') ? 'spec sheet' : /product page/.test(d.src || '') ? 'Parts Express' : /datasheet/.test(d.src || '') ? 'maker' : /WinISD/.test(d.src || '') ? 'WinISD' : (d.src || ''));
+    const num = (v, dp) => (v == null || !isFinite(v) ? '' : (+v).toFixed(dp));
+    const row = (d, i) => `<div class="${i === pickHi ? 'hi' : ''}${d.k === design.driverKey ? ' cur' : ''}" data-i="${i}" title="${esc(d.src || '')}"><span>${esc(d.b)} ${esc(d.m)}${d.prof ? ' <span class="auto" title="Outline traced from the technical drawing">drawing</span>' : ''}</span>` +
+      `<small>${nominal(d)}"${d.Fs ? ' · Fs ' + num(d.Fs, 0) : ''}${d.Xmax ? ' · Xmax ' + num(d.Xmax, d.Xmax < 10 ? 1 : 0) : ''}${d.Pe ? ' · ' + num(d.Pe, 0) + ' W' : ''} · ${esc(srcTag(d))}</small></div>`;
+    const more = pickTotal > pickRes.length ? ` (showing ${pickRes.length})` : '';
+    el.innerHTML = `<div class="pickhead"><span>${pickTotal} driver${pickTotal === 1 ? '' : 's'}${more}${$('drvBrand').value === 'user' ? ' · imported by you' : ''}</span><span>${cur ? 'now: ' + esc(label(cur)) : ''}</span></div>` +
+      `<div class="pickhead tips">Type a model, brand or size · also <b>18" neo</b> · <b>8ohm</b> · <b>fs&lt;35</b> · <b>xmax&gt;10</b> · <b>qts&lt;0.4</b> · <b>pe&gt;1000</b></div>` +
+      (pickRes.map(row).join('') || `<div class="pickhead">No driver matches that. Try fewer words${$('drvBrand').value || $('drvSize').value ? ', set Brand and Size back to All,' : ''} or use Import driver… to add your own.</div>`);
     el.hidden = false;
+    // drop the list straight down from the search box, kept inside the window
+    const pr = el.parentElement.getBoundingClientRect(), sr = $('drvSearch').parentElement.getBoundingClientRect(), lw = Math.min(600, innerWidth - 16);
+    el.style.left = Math.max(8 - pr.left, Math.min(sr.left - pr.left, innerWidth - 8 - lw - pr.left)) + 'px';
+    el.style.top = (sr.bottom - pr.top + 3) + 'px';
+    const hi = el.querySelector('.hi'); if (hi && hi.scrollIntoView) hi.scrollIntoView({ block: 'nearest' });
     el.querySelectorAll('[data-i]').forEach((n) => n.onmousedown = (e) => { e.preventDefault(); choose(pickRes[+n.dataset.i]); });
   }
   function choose(d) {
@@ -2898,7 +2940,7 @@
     clampWidth(true);
     $('drvList').hidden = true; setPickerText(); $('drvSearch').blur(); changed();
   }
-  $('drvSearch').addEventListener('focus', () => { $('drvSearch').select(); pickHi = 0; showPicker(); });
+  $('drvSearch').addEventListener('focus', () => { $('drvSearch').value = ''; pickHi = 0; showPicker(); });   // empty box = the placeholder says what you can type
   for (const id of ['drvBrand', 'drvSize']) $(id).addEventListener('change', () => { pickHi = 0; $('drvSearch').value = ''; $('drvSearch').focus(); showPicker(); });
   $('drvSearch').addEventListener('input', () => { pickHi = 0; showPicker(); });
   $('drvSearch').addEventListener('blur', () => setTimeout(() => { $('drvList').hidden = true; setPickerText(); }, 120));

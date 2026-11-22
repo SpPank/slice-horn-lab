@@ -29,7 +29,7 @@ header.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px
 .field { display: inline-flex; align-items: center; gap: 6px; }
 .field > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 input, select, button, textarea { font: inherit; color: var(--ink); }
-input[type=text], input[type=number], select, textarea { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
+input[type=text], input[type=search], input[type=number], select, textarea { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
 input[type=number] { width: 78px; font-family: var(--font-data); font-size: 12px; }
 input.num { width: 78px; font-family: var(--font-data); font-size: 12px; }
 button { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
@@ -129,8 +129,15 @@ table.ts td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
 table.ts td:first-child { color: var(--muted); font-family: var(--font-ui); }
 table.ts input { width: 70px; padding: 1px 4px; }
 .picker { position: relative; }
-.picker input { width: 200px; }
-.picker .list { position: absolute; z-index: 30; top: 100%; left: 0; width: 360px; max-width: 90vw; max-height: 340px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.picker .srch { position: relative; display: inline-flex; align-items: center; }
+.picker .srch svg { position: absolute; left: 8px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+.picker input { width: 250px; height: 26px; box-sizing: border-box; padding-left: 28px; -webkit-appearance: none; appearance: none; outline-offset: 0; }
+.picker input::-webkit-search-cancel-button { cursor: pointer; }
+.picker .list .pickhead.tips { text-transform: none; letter-spacing: 0; display: block; border-bottom: 1px solid var(--line); }
+.picker .list .pickhead.tips b { color: var(--ink); font-family: var(--font-data); font-weight: 500; }
+.picker .list div[data-i] > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.picker .list div.cur > span { font-weight: 600; }
+.picker .list { position: absolute; z-index: 30; top: 100%; left: 0; width: 600px; max-width: calc(100vw - 16px); max-height: 340px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .picker .list div { padding: 5px 9px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
 .picker .list div:hover, .picker .list div.hi { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 #drvImport { padding: 3px 8px; font-size: 12px; white-space: nowrap; }
@@ -181,6 +188,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   .picker input { width: 180px; }
 }
 @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .picker .list div[data-i] { flex-wrap: wrap; gap: 0 8px; } .picker .list div[data-i] > span { flex: 1 1 100%; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -190,8 +198,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     <div class="field picker" id="pickerWrap"><span>Driver</span>
       <button id="drvImport" title="Import a driver from a WinISD .wdr, a Hornresp driver/record, a spec-sheet PDF or pasted text">Import driver…</button>
       <select id="drvBrand" aria-label="Brand"><option value="">All brands</option><option value="user">User (imported)</option><option value="bc">B&amp;C</option><option value="eminence">Eminence</option><option value="faital">Faital Pro</option><option value="beyma">Beyma</option><option value="celestion">Celestion</option><option value="lavoce">Lavoce</option></select>
-      <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–21"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option></select>
-      <input type="text" id="drvSearch" placeholder="Search model…" autocomplete="off"><div class="list" id="drvList" hidden></div></div>
+      <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–24"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option><option value="24">24"</option></select>
+      <span class="srch" title="Search the driver library ( / )"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input type="search" id="drvSearch" placeholder="Search drivers: model, brand, 18&quot;, fs&lt;35…" autocomplete="off" spellcheck="false" aria-label="Search drivers"></span><div class="list" id="drvList" hidden></div></div>
     <label class="field"><span>Start from</span><select id="preset">
       <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="x1">X1 18" (Rog Mogale)</option><option value="s12bp">S12BP (B&amp;C Speakers)</option><option value="s21hl">S21HL (B&amp;C Speakers)</option><option value="s218bp">S218BP (B&amp;C Speakers)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
     </select></label>
@@ -214,7 +222,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
           <h4>Quick start</h4>
           <ol>
             <li>It opens with an 18" tapped horn so you can see how it works. <b>Start from</b> (top) has more presets.</li>
-            <li>Pick a driver at the top: filter by <b>Brand</b> and <b>Size</b>, or search by model. <b>Import driver…</b> takes a Hornresp file, WinISD .wdr or a spec sheet PDF.</li>
+            <li>Pick a driver at the top: filter by <b>Brand</b> and <b>Size</b>, or click the <b>search box</b> (or press <span class="kbd">/</span>) and type a model, brand or size. It also takes <b>neo</b>, <b>8ohm</b> and limits like <b>fs&lt;35</b>, <b>xmax&gt;10</b>, <b>qts&lt;0.4</b>. <b>Import driver…</b> takes a Hornresp file, WinISD .wdr or a spec sheet PDF.</li>
             <li>Edit the cabinet here on the left. The curves update as you drag.</li>
             <li>Read the results on the tabs above the graph (SPL, Impedance, Excursion, Group delay, Step, Decay, Max SPL…).</li>
             <li><b>File → Download design</b> saves your work. It also auto-saves in this browser.</li>
