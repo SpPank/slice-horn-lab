@@ -227,7 +227,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
             <li><span class="kbd">V</span> select. Drag a board's <b>end</b> to stretch it (joined ends follow; <span class="kbd">Shift</span> = that end only), its <b>middle</b> to move it, anywhere else to slide it sideways.</li>
             <li><span class="kbd">D</span> driver: click a board to mount it. <span class="kbd">F</span> flips it. Right-click it for front/rear mounting.</li>
             <li>Right-click a corner to change how two boards join.</li>
-            <li><b>Design</b> panel (right side): internal width, board thickness, floor / wall / corner loading.</li>
+            <li><b>Design</b> panel (right side): the <b>cabinet width</b> slider (driver + 2" to 2 × the driver), board thickness, floor / wall / corner loading.</li>
             <li>Air paths are found automatically. You don't need to draw them.</li>
             <li><span class="kbd">Ctrl Z</span> undo · wheel zooms · right-drag pans · <span class="kbd">0</span> fit · <span class="kbd">?</span> this help.</li>
           </ul>
@@ -1580,6 +1580,20 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     if (hr) { hr.Pe = s.Pe || 0; hr.Xmax = s.Xmax || 0; }
     hrCache.set(sig, hr); return hr;
   }
+  /** Cabinet width (the extrusion, into the screen) allowed by the biggest driver: at least its frame + 2", at most 2 x its
+   *  frame, and a new design starts at frame + 3". */
+  const IN = 25.4;
+  function widthRange(d) {
+    d = d || design;
+    const keys = (d.drivers || []).map((q) => q.key).concat(d.driverKey ? [d.driverKey] : []);
+    const dia = Math.max(0, ...keys.map((k) => driverDims(k).outer).filter(isFinite)) || 460;
+    return { dia, min: Math.round(dia + 2 * IN), def: Math.round(dia + 3 * IN), max: Math.round(2 * dia) };
+  }
+  function clampWidth(note) {
+    const r = widthRange(), w0 = design.W;
+    design.W = Math.min(r.max, Math.max(r.min, design.W));
+    if (note && design.W !== w0) flash(`Cabinet width set to ${toU(design.W)} ${snapMode().unit}: it has to stay between the driver + 2" and 2 x the driver.`);
+  }
   function driverDims(key) {
     const s = specOf(key) || {}; const d = s.dims || {};
     const Dc = 2 * Math.sqrt((s.Sd || 855) / Math.PI) * 10; // effective cone dia mm
@@ -1970,6 +1984,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       d.dsp = { hp: { on: true, type: 'BW', order: 2, f: 30 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
         peq: [{ on: true, type: 'pk', f: 34, g: 3, q: 4 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
     }
+    if (['th', 'flh', 'vented', 'sealed', 'blank'].includes(kind)) d.W = widthRange(d).def;   // starting templates: driver + 3"
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });
@@ -4216,10 +4231,12 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     h += `<h3>Parts <label class="row" style="text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="showLbl"> always show names</label></h3>
       <div class="parts">${pl.html || '<div class="note">No boards yet. Pick the board tool (P) and drag a line on the grid.</div>'}</div>
       <div class="note">Slide to change a board's length (it grows from its start end; select a board for angle, position and which end it grows from). Hover a board's middle for its name, anywhere else on it for its length. Names marked <span class="auto">auto</span> were worked out from the drawing; click one and choose a role to override.</div>`;
+    const wr = widthRange();
     h += `<h3>Design <span class="pill">${esc(design.name)}</span></h3>
+      ${sliderRow('dsWs', 'Cabinet width (inside, into the screen)', design.W, wr.min, wr.max, snapMode().step)}
+      <div class="note">From the driver + 2" (${toU(wr.min)}) to 2 × the driver (${toU(wr.max)}) ${snapMode().unit}; a new design starts at the driver + 3".${design.W < wr.min ? ` This design was published ${toU(wr.min - design.W)} ${snapMode().unit} narrower than that minimum; moving the slider brings it into range.` : ''}</div>
       <div class="grid2">
         <label>Name <input type="text" id="dsName" value="${esc(design.name)}"></label>
-        <label>Internal width (depth of the extrusion) ${numIn('dsW', toU(design.W))}</label>
         <label>Board thickness ${numIn('dsT', toU(design.t))}</label>
         <label>Material <select id="dsMat"><option value="birch">Baltic birch</option><option value="mdf">MDF</option></select></label>
         <label>Radiation space <select id="dsSpace"><option value="0.5">4π free space</option><option value="1">2π on the floor</option><option value="2">1π floor + wall</option><option value="4">½π corner</option></select></label>
@@ -4238,7 +4255,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     $('dsMat').value = design.material; $('dsSpace').value = String(design.space); $('dsLoss').value = design.losses ? '1' : '0'; $('dsAuto').checked = !!design.autoCenter;
     const on = (id, fn) => $(id).onchange = (e) => { commit(); fn(e.target); changed(); };
     on('dsName', (t) => design.name = t.value || 'Untitled');
-    on('dsW', (t) => design.W = Math.max(10, parseL(t.value)));
+    bindSlider('dsWs', (v) => { const r = widthRange(); design.W = Math.min(r.max, Math.max(r.min, v)); });
     on('dsT', (t) => design.t = Math.max(3, parseL(t.value)));
     on('dsMat', (t) => design.material = t.value);
     on('dsSpace', (t) => design.space = +t.value);
@@ -4288,6 +4305,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     commit();
     const apply = targets.length ? targets.map((s) => design.drivers.find((q) => q.id === s.id)) : design.drivers;
     apply.forEach((q) => { if (q) q.key = d.k; });
+    clampWidth(true);
     $('drvList').hidden = true; setPickerText(); $('drvSearch').blur(); changed();
   }
   $('drvSearch').addEventListener('focus', () => { $('drvSearch').select(); pickHi = 0; showPicker(); });

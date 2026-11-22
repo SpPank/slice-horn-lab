@@ -44,7 +44,7 @@ The traced designs are approximations for simulation. Build from each designer's
 
 ## Drawing the cabinet
 
-The left side is the cabinet's **side view**. Every line you draw is a board with real thickness (set in **Design → Board thickness**, 18 mm by default). The **internal width** of the cabinet (how deep the "extrusion" is into the screen) is **Design → Internal width**.
+The left side is the cabinet's **side view**. Every line you draw is a board with real thickness (set in **Design → Board thickness**, 18 mm by default). The cabinet's **width** (how far the drawing extends into the screen) is the **Cabinet width** slider at the top of the **Design** panel. It runs from the biggest driver's frame + 2" up to 2 × the frame, and a new design starts at the frame + 3". Changing to a driver that doesn't fit moves the width into range.
 
 ### Tools (left toolbar)
 
@@ -140,7 +140,7 @@ You review every value before saving. Imported drivers appear under **Brand → 
 
 ## Design settings
 
-Right panel → **Design**: name, internal width, board thickness, material (Baltic birch / MDF), radiation space (4π, 2π floor, 1π floor + wall, ½π corner), vent leakage QL, wall friction losses, automatic air paths and the hump tuner.
+Right panel → **Design**: the cabinet width slider, name, board thickness, material (Baltic birch / MDF), radiation space (4π, 2π floor, 1π floor + wall, ½π corner), vent leakage QL, wall friction losses, automatic air paths and the hump tuner.
 
 ## Saving and exporting (File menu)
 
