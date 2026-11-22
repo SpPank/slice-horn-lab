@@ -1818,7 +1818,7 @@
   const fRange = () => { const r = design.fRange || [20, 1000]; return [Math.max(20, r[0]), r[1]]; };
   function renderTabs() {
     $('tabs').innerHTML = TABS.map((t) => `<button class="${t.id === tab ? 'on' : ''}" data-tab="${t.id}">${t.name}</button>`).join('');
-    $('tabs').querySelectorAll('button').forEach((b) => b.onclick = () => { if (b.dataset.tab !== tab) pwrW = 1; tab = b.dataset.tab; LS.set('shl.tab', tab); renderTabs(); if (['step', 'decay'].includes(tab) && !T) scheduleTransient(); drawChart(); refreshLegend(); });
+    $('tabs').querySelectorAll('button').forEach((b) => b.onclick = () => { tab = b.dataset.tab; LS.set('shl.tab', tab); renderTabs(); if (['step', 'decay'].includes(tab) && !T) scheduleTransient(); drawChart(); refreshLegend(); });
   }
   function seriesFor() {
     if (!R) return null;
@@ -1848,11 +1848,11 @@
       pins.forEach((p, i) => base.series.unshift({ x: p.f, y: p.ze, color: pinCol(i), width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'exc') {
-      const ov = overRatio(1);
-      base.yLabel = `mm peak @ ${driveLabel(1)}`; base.series.push({ x: f, y: R.x, color: C.accent, width: 2, label: 'Cone excursion', over: ov });
+      const kx = Math.sqrt(pwrW), ov = overRatio(kx);
+      base.yLabel = `mm peak @ ${driveLabel(pwrW)}`; base.series.push({ x: f, y: R.x.map((v) => v * kx), color: C.accent, width: 2, label: 'Cone excursion', over: ov });
       if (ov) base.bands = overBands(f, ov);
       if (R.Xmax) base.hlines = [{ y: R.Xmax, color: C.bad, label: `Xmax ${R.Xmax} mm` }];
-      pins.forEach((p, i) => base.series.unshift({ x: p.f, y: p.x, color: pinCol(i), width: 1.2, label: p.name }));
+      pins.forEach((p, i) => base.series.unshift({ x: p.f, y: p.x.map((v) => v * kx), color: pinCol(i), width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'load') {
       base.yLabel = 'normalised to ρc/Sd'; base.series.push({ x: f, y: R.ra, color: C.accent, width: 2, label: 'Resistance Ra' }, { x: f, y: R.xa, color: C.driver, width: 1.5, label: 'Reactance Xa' });
@@ -1861,8 +1861,8 @@
       pins.forEach((p, i) => p.gd && base.series.unshift({ x: p.f, y: p.gd, color: pinCol(i), width: 1.2, label: p.name }));
       const vals = R.gd.filter((_, i) => f[i] >= Math.max(f0, 15) && f[i] <= f1); base.ymin = Math.min(0, Math.floor(Math.min(...vals) / 5) * 5); base.ymax = Math.max(10, Math.ceil(Math.max(...vals) / 5) * 5);
     } else if (tab === 'vel') {
-      base.yLabel = `m/s peak @ ${driveLabel(1)}`;
-      R.radLabels.forEach((lb, k) => base.series.push({ x: f, y: R.vel.map((v) => v[k]), color: k ? C.driver : C.accent, width: 2, label: prettyRad(lb) }));
+      base.yLabel = `m/s peak @ ${driveLabel(pwrW)}`;
+      R.radLabels.forEach((lb, k) => base.series.push({ x: f, y: R.vel.map((v) => v[k] * Math.sqrt(pwrW)), color: k ? C.driver : C.accent, width: 2, label: prettyRad(lb) }));
       base.hlines = [{ y: 17, color: C.warn, label: '17 m/s port-noise guide' }]; base.ymin = 0;
     } else if (tab === 'max') {
       base.yLabel = 'dB SPL @ 1 m';
@@ -2110,15 +2110,16 @@
     if (cfg && cfg.bands) parts.push(`<span><i style="background:${C.bad}"></i>Over Xmax</span>`);
     if (tab === 'decay') parts.push('<span>Long bright streaks = ringing (pipe or chamber resonance).</span>');
     if (tab === 'step') parts.push(`<span>${dspActive() ? 'Through the DSP filters' : 'Unfiltered (DSP off)'} · time from amplifier.</span>`);
-    const pc = $('pwrCol'), showP = !!(R && R.Re && tab === 'spl');
+    const pc = $('pwrCol'), showP = !!(R && R.Re), pwrTab = ['spl', 'exc', 'vel'].includes(tab);   // always on the left; it changes SPL, excursion and air velocity
     pc.hidden = !showP;
     if (showP) {
       if (!$('pwrRange')) pc.innerHTML = `<span class="pttl">Power</span>
         <span class="pnum"><input type="text" id="pwrNum" title="Type a wattage (2.5k works)">W</span>
-        <div class="ptrack"><input type="range" id="pwrRange" min="0" max="4" step="0.005" title="Amplifier power into Re, 1 W to 10 kW (log scale). Resets to 1 W when you leave this tab.">
+        <div class="ptrack"><input type="range" id="pwrRange" min="0" max="4" step="0.005" title="Amplifier power into Re, 1 W to 10 kW (log scale). Applies to SPL, Excursion and Air velocity.">
           <div class="pticks"><span>10k</span><span>1k</span><span>100</span><span>10</span><span>1</span></div></div>`;
       $('pwrRange').value = Math.log10(pwrW).toFixed(3); $('pwrNum').value = +pwrW.toPrecision(3);
-      parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${powerStatus()}</span></div>`);
+      pc.classList.toggle('idle', !pwrTab); pc.title = pwrTab ? '' : 'Power has no effect on this tab (the model is linear); it applies to SPL, Excursion and Air velocity.';
+      if (pwrTab) parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${powerStatus()}</span></div>`);
     }
     parts.push(`<span style="flex:1"></span><button id="pinBtn" title="Keep this curve as a grey overlay to compare against">Pin curve</button>${pins.length ? '<button id="clrPins">Clear pins</button>' : ''}`);
     const dspTabs = ['spl', 'exc', 'gd', 'step', 'decay', 'vel'];
@@ -2148,7 +2149,7 @@
       const setW = (W, fromSlider) => {
         pwrW = clamp(W, 1, 10000);
         $('pwrNum').value = +pwrW.toPrecision(3); if (!fromSlider) pr.value = Math.log10(pwrW).toFixed(3);
-        $('pwrStat').innerHTML = powerStatus(); const b = document.querySelector('.pwrstat b'); if (b) b.textContent = 'Power ' + fmtW(pwrW); drawChart();
+        if ($('pwrStat')) $('pwrStat').innerHTML = powerStatus(); const b = document.querySelector('.pwrstat b'); if (b) b.textContent = 'Power ' + fmtW(pwrW); drawChart();
       };
       pr.oninput = () => setW(+Math.pow(10, +pr.value).toPrecision(2), true);
       $('pwrNum').onchange = (e) => { const v = parseFloat(String(e.target.value).replace(/k/i, 'e3')); if (v > 0) setW(v, false); };

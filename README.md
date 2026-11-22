@@ -68,9 +68,9 @@ Chart tabs above the graph:
 
 | Tab | Shows |
 |---|---|
-| **SPL** | Sound pressure at 1 m. Defaults to **1 W**; use the **Power** slider on the left (1 W to 10 kW, log scale) to see it louder. Anywhere the cone goes **past Xmax** the curve turns **red** and is shaded, and the line under the legend lists the ranges and peak excursion. The slider resets to 1 W when you leave the tab. |
+| **SPL** | Sound pressure at 1 m. Defaults to **1 W**; use the **Power** slider on the left (1 W to 10 kW, log scale) to see it louder. Anywhere the cone goes **past Xmax** the curve turns **red** and is shaded, and the line under the legend lists the ranges and peak excursion. The Power slider stays on the left on every tab; it also scales Excursion and Air velocity (the other tabs don't change with level). |
 | **Impedance** | Electrical impedance magnitude and phase. The horn and pipe resonances show as peaks. |
-| **Excursion** | Peak cone movement at 1 W with the Xmax line. |
+| **Excursion** | Peak cone movement at the Power slider's level, with the Xmax line; past Xmax is red. |
 | **Cone load** | Acoustic resistance and reactance on the cone. |
 | **Group delay** | How late each frequency arrives (ms). |
 | **Step / impulse** | Time response: how cleanly it starts and stops. Long tails mean stored energy. |

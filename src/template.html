@@ -76,6 +76,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .chartrow .chartwrap { flex: 1 1 auto; min-width: 0; margin: 0; height: auto; }
 .pwrcol { flex: none; width: 66px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--raised); }
 .pwrcol[hidden] { display: none; }
+.pwrcol.idle { opacity: .55; }
+.pwrcol.idle:hover { opacity: 1; }
 .pwrcol .pttl { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); }
 .pwrcol .pnum { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
 .pwrcol .pnum input { width: 44px; padding: 2px 3px; font-size: 11px; text-align: right; }
@@ -224,7 +226,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
           </ul>
           <h4>Handy extras</h4>
           <ul>
-            <li><b>Power slider</b> (left of the SPL graph, 1 W–10 kW): anything past Xmax turns <b class="bad">red</b>.</li>
+            <li><b>Power slider</b> (left of the graph, 1 W–10 kW, on every tab): scales SPL, excursion and air velocity; anything past Xmax turns <b class="bad">red</b>.</li>
             <li><b>DSP bar</b>: HPF/LPF (Butterworth, LR, Bessel up to 48 dB/oct) + 6 PEQs, with the filter curve shown in green.</li>
             <li><b>Target</b>: drag orange EQ-style handles to the response you want, then <b>Auto-tune re-design</b> reshapes the cabinet to match.</li>
             <li><b>Pin curve</b> to compare before and after.</li>
