@@ -67,7 +67,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .status .chip { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font-size: 12px; pointer-events: auto; }
 .status .chip.warn { border-color: var(--warn); color: var(--warn); }
 .status .dims { font-family: var(--font-data); }
-.side { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); overflow: auto; }
+.side { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); overflow: hidden; }
+.sidetop { flex: none; padding-bottom: 8px; border-bottom: 1px solid var(--line); box-shadow: 0 6px 10px -8px rgba(0,0,0,.45); position: relative; z-index: 1; }
+.sidescroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.legend2 { padding-top: 8px; }
+.legend2[hidden] { display: none; }
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 0; }
 .tabs button { padding: 3px 8px; font-size: 12px; border-radius: 999px; }
 .tabs button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
@@ -173,6 +177,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   .main { grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: 62vh auto; }
   .splitter { display: none; }
   .side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .sidescroll { overflow: visible; }
   .picker input { width: 180px; }
 }
 @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -242,11 +247,16 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     </div>
     <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" tabindex="0" title="Drag to resize · double-click to reset"></div>
     <aside class="side">
-      <div class="tabs" id="tabs"></div>
-      <div class="chartrow"><div class="pwrcol" id="pwrCol" hidden></div><div class="chartwrap"><canvas id="chart"></canvas></div></div>
-      <div class="legend" id="legend"></div>
-      <div class="stats" id="stats"></div>
-      <div class="insp" id="insp"></div>
+      <div class="sidetop">
+        <div class="tabs" id="tabs"></div>
+        <div class="chartrow"><div class="pwrcol" id="pwrCol" hidden></div><div class="chartwrap"><canvas id="chart"></canvas></div></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="sidescroll" id="sideScroll">
+        <div class="legend legend2" id="legend2"></div>
+        <div class="stats" id="stats"></div>
+        <div class="insp" id="insp"></div>
+      </div>
     </aside>
   </div>
 </div>

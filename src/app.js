@@ -2401,10 +2401,11 @@
     parts.push(`<span style="flex:1"></span><button id="pinBtn" title="Keep this curve as a grey overlay to compare against">Pin curve</button>${pins.length ? '<button id="clrPins">Clear pins</button>' : ''}`);
     const dspTabs = ['spl', 'exc', 'gd', 'step', 'decay', 'vel'];
     parts.push(`<select id="fRangeSel" aria-label="Frequency range"><option value="20,500">20–500 Hz</option><option value="20,1000">20–1k Hz</option><option value="20,2000">20–2k Hz</option></select>`);
-    if (R && dspTabs.includes(tab)) parts.push(dspBarHtml());
+    const lower = [];   // DSP bar and target live at the top of the scrolling part of the panel
+    if (R && dspTabs.includes(tab)) lower.push(dspBarHtml());
     if (tab === 'spl') {
       const T = design.target, run = !!tuneJob;
-      parts.push(`<div class="tunebar"><span class="tunettl">Target</span>
+      lower.push(`<div class="tunebar"><span class="tunettl">Target</span>
         <button id="tgCur" ${run ? 'disabled' : ''} title="Put handles on the current response, then drag them">From current</button>
         <button id="tgFlat" ${run ? 'disabled' : ''}>Flat</button>
         ${T ? `<button id="tgClear" ${run ? 'disabled' : ''}>Clear</button>
@@ -2414,6 +2415,7 @@
         <span id="tuneStatus" class="note">${T && R ? `Target miss now ${targetError(R.f, R.splRaw).toFixed(2)} dB RMS` : ''}</span></div>`);
     }
     el.innerHTML = parts.join('');
+    $('legend2').innerHTML = lower.join(''); $('legend2').hidden = !lower.length;
     if ($('tgCur')) $('tgCur').onclick = () => { commit(); targetFromCurrent(); drawChart(); refreshLegend(); };
     if ($('tgFlat')) $('tgFlat').onclick = () => { commit(); targetFlat(); drawChart(); refreshLegend(); };
     if ($('tgClear')) $('tgClear').onclick = () => { commit(); design.target = null; drawChart(); refreshLegend(); };
