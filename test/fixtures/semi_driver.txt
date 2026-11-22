@@ -1,0 +1,21 @@
+Test 12in semi
+
+Sd = 522.00
+Bl = 13.50
+Cms = 2.20E-04
+Rms = 2.10
+Mmd = 85.00
+Le = 8.19
+Re = 4.51
+Pmax = 300
+Xmax = 9.0
+Re' = 4.51
+Leb = 1.54
+Le = 6.65
+Ke = 0.344
+Rss = 150.76
+Rms = 1.60
+Ams = 3.0E-04
+LossyLe = 0
+SemiInductance = 1
+Damping = 1

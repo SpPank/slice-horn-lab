@@ -1,0 +1,12 @@
+# downloaded manufacturer spec sheets and drawings (large, not ours to republish)
+data/sheets/
+data/sheets_mfr/
+data/profile_previews/
+*.pdf
+# build output for the claude.ai viewer
+dist/
+# local tooling
+.claude/
+node_modules/
+__pycache__/
+*.pyc
