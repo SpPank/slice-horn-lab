@@ -23,12 +23,14 @@ let PROF = {};
 try { PROF = JSON.parse(fs.readFileSync(path.join(root, 'data', 'profiles.json'), 'utf8')); } catch (e) { }
 const sheetFiles = fs.existsSync(path.join(root, 'data', 'sheets')) ? fs.readdirSync(path.join(root, 'data', 'sheets')) : [];
 const profFor = (rel) => { const p = rel && PROF[rel.split(String.fromCharCode(92)).join('/')]; return p && p.ok && p.profile ? p.profile : undefined; };
-const peProf = (sku) => { if (!sku) return undefined; const f = sheetFiles.filter((n) => n.startsWith(sku + '-') && /draw/i.test(n)).sort()[0]; return f ? profFor('sheets/' + f) : undefined; };
+const peProf = (sku) => { if (!sku) return undefined; const mine = sheetFiles.filter((n) => n.startsWith(sku + '-')).sort(); const f = mine.find((n) => /draw/i.test(n)); if (f) return profFor('sheets/' + f); const sh = mine.find((n) => /spec-sheet/i.test(n)); return sh ? profFor('sheets/' + sh) : undefined; };   // Lavoce: the drawing is on the spec sheet
 const pe = path.join(root, 'data', 'pe_drivers.json');
 let peCount = 0;
 if (fs.existsSync(pe)) {
   try {
     const peRows = JSON.parse(fs.readFileSync(pe, 'utf8'));
+    const lav = path.join(root, 'data', 'pe_lavoce.json');   // Lavoce 8-21" (Parts Express + spec sheets)
+    if (fs.existsSync(lav)) peRows.push(...JSON.parse(fs.readFileSync(lav, 'utf8')));
     const peCountN = {}; peRows.forEach((d) => { const n = d.brand + ' ' + d.model + '|' + d.source; peCountN[n] = (peCountN[n] || 0) + 1; });
     for (const d0 of peRows) {
       const d = (peCountN[d0.brand + ' ' + d0.model + '|' + d0.source] > 1 && d0.nominal_ohms && !new RegExp('-' + d0.nominal_ohms + '$').test(d0.model)) ? { ...d0, model: `${d0.model} ${d0.nominal_ohms}Ω` } : d0;

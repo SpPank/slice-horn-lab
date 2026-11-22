@@ -286,6 +286,15 @@ def jobs():
         cands = sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*draw*.pdf')) + glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*draw*.PDF')))
         if cands:
             out.append((os.path.relpath(cands[0], DATA), dims['outer_dia'], dims.get('depth_total'), dims))
+    lv = os.path.join(DATA, 'pe_lavoce.json')   # Lavoce: no separate drawing, the dimension drawing is on the spec sheet
+    if os.path.exists(lv):
+        for d in json.load(open(lv, encoding='utf8')):
+            dims = d.get('dims') or {}
+            if d.get('source') != 'product_page' or not dims.get('outer_dia'):
+                continue
+            c = sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*spec-sheet.pdf')))
+            if c:
+                out.append((os.path.relpath(c[0], DATA), dims['outer_dia'], dims.get('depth_total'), dims))
     mf = os.path.join(DATA, 'mfr_drivers.json')
     if os.path.exists(mf):
         for d in json.load(open(mf, encoding='utf8')):
@@ -300,8 +309,13 @@ def jobs():
 
 def main():
     prev_n = int(sys.argv[sys.argv.index('--preview') + 1]) if '--preview' in sys.argv else 0
+    only = sys.argv[sys.argv.index('--only') + 1].lower() if '--only' in sys.argv else None
     out, seen = {}, set()
+    if only and os.path.exists(os.path.join(DATA, 'profiles.json')):
+        out = json.load(open(os.path.join(DATA, 'profiles.json')))   # keep everything else, redo only the matching files
     for i, (rel, od, dep, dims) in enumerate(jobs()):
+        if only and only not in rel.lower():
+            continue
         key = rel.replace('\\', '/')
         if key in seen:
             continue

@@ -112,7 +112,7 @@ On the SPL tab, the **Target** bar lets you draw the response you want:
 
 ## Drivers
 
-The built-in library has about 1,250 drivers: B&C, Eminence and Faital Pro 8–21" pro woofers (from Parts Express listings and manufacturer data sheets), plus your WinISD library if you build it yourself. About 165 have real outlines traced from their technical drawings, so the basket you see is the actual shape.
+The built-in library has about 1,285 drivers: B&C, Eminence, Faital Pro and Lavoce 8–21" pro woofers (from Parts Express listings and manufacturer data sheets), plus your WinISD library if you build it yourself. About 175 have real outlines traced from their technical drawings, so the basket you see is the actual shape; the rest are drawn from their stated frame, cutout and depth.
 
 **Import driver…** (next to Brand) adds your own from:
 - a **Hornresp** driver or record file (including the advanced semi-inductance and frequency-dependent damping parameters),
@@ -193,4 +193,4 @@ The default project is `data/default_design.json`. Replace its `design` with any
 - **SKRAM** is designed by Josh Ricci (ZOD Audio); the plans were shared by [TinkerandParty](https://tinkerandparty.com/) with his permission. Please credit Josh if you use it commercially. **18" tapped horn** design by Speaker Box Maker; **1850 folded horn** by Rog Mogale.
 - Acoustic model after David McBean's **Hornresp**; this is an independent re-implementation, not affiliated with it.
 - Advanced driver model after Thorborg & Futtrup, *JAES* 2011.
-- Driver data from Parts Express product listings and B&C, Eminence and Faital Pro data sheets. Check critical numbers against the current manufacturer data sheet.
+- Driver data from Parts Express product listings and B&C, Eminence, Faital Pro and Lavoce data sheets. Check critical numbers against the current manufacturer data sheet.

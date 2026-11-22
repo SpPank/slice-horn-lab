@@ -2389,7 +2389,7 @@
 
   // ---------------------------------------------------------------- driver picker
   function setPickerText() { const s = specOf(design.driverKey); $('drvSearch').value = s ? label(s) : ''; }
-  const BRANDS = { bc: /^B&C/i, eminence: /^Eminence/i, faital: /^Faital/i };
+  const BRANDS = { bc: /^B&C/i, eminence: /^Eminence/i, faital: /^Faital/i, lavoce: /^Lavoce/i };
   const nominal = (d) => {
     if (d.size) return +d.size;
     const dc = 2 * Math.sqrt((d.Sd || 0) / Math.PI) / 2.54;   // effective cone dia, inches
