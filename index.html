@@ -195,7 +195,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–21"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option></select>
       <input type="text" id="drvSearch" placeholder="Search model…" autocomplete="off"><div class="list" id="drvList" hidden></div></div>
     <label class="field"><span>Start from</span><select id="preset">
-      <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="csub">C Sub 18" (Rog Mogale)</option><option value="sub184">184 Sub (Rog Mogale)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
+      <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="s12bp">S12BP (B&amp;C Speakers)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
     </select></label>
     <div class="field seg" role="group" aria-label="Grid and units"><span>Grid</span><div id="snapSeg"></div></div>
     <div class="field seg" role="group" aria-label="Side view"><span>View</span><div id="viewSeg" class="segbox"></div></div>
@@ -239,7 +239,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
             <li><b>Pin curve</b> to compare before and after.</li>
             <li><b>Quantize the build</b> (Design panel) rounds everything to whole mm and 5° angles before you cut.</li>
             <li>Export: cut list, DXF side profile, CSV response, and the equivalent Hornresp inputs to cross-check.</li>
-            <li>Presets: 18" tapped horn (Speaker Box Maker), 1850 folded horn (Rog Mogale), SKRAM 21" and Skhorn 2×21" (Josh Ricci), BC118 (All_1), Super Scooper 18" and 21", 186 Horn, HD 15 Horn, G Sub, C Sub and 184 Sub (Rog Mogale), plus tapped horn / FLH / vented / sealed templates.</li>
+            <li>Presets: 18" tapped horn (Speaker Box Maker), 1850 folded horn (Rog Mogale), SKRAM 21" and Skhorn 2×21" (Josh Ricci), BC118 (All_1), Super Scooper 18" and 21", 186 Horn, HD 15 Horn and G Sub (Rog Mogale), S12BP (B&amp;C Speakers), plus tapped horn / FLH / vented / sealed templates.</li>
           </ul>
           <h4>Limits</h4>
           <p>It's a 1-D plane-wave model like Hornresp (checked against Hornresp exports: 0.00 dB on a front-loaded horn, ~0.05 dB on a vented box). It doesn't model panel flex, port compression or driver non-linearity, so treat the red over-excursion areas as "not actually reachable". The preset designs are traced approximations for simulation; build from the designers' own plans.</p>
@@ -1644,7 +1644,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', csub: 'C Sub 18in (Rog Mogale)', sub184: '184 Sub (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
     else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
@@ -1812,48 +1812,37 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       d.drivers.push({ id: ++d.seq, x: 43, y: 838, nx: -1, ny: 0, key: kg, n: 1, wiring: 'parallel' });
       d.drivers.push({ id: ++d.seq, x: 43, y: 262, nx: -1, ny: 0, key: kg, n: 1, wiring: 'parallel' });
     }
-    if (kind === 'csub') {
-      // C Sub: Rog Mogale's coupled-cavity sub (speakerplans.com, 2000). 500 x 1000 x 626 (464 inside). The 18" fires up from a
-      // horizontal baffle into a cavity open at the front (with a 306 mm shelf); the rear chamber has a 224 x 125 port, 314
-      // deep, drawn as a slot of the same area (60 mm across the 464 mm width). PD 1850: 35-90 Hz.
-      d.W = 464; d.panels = []; d.seq = 0;
-      P(d, 0, 991, 626, 991); P(d, 0, 9, 626, 9); P(d, 617, 982, 617, 18);     // top, bottom, back
-      P(d, 0, 665, 608, 665);                                                   // driver baffle (cavity floor)
-      P(d, 0, 844, 306, 844);                                                   // cavity shelf, 306 deep
-      P(d, 9, 656, 9, 329); P(d, 9, 233, 9, 18);                               // lower front, split by the port
-      P(d, 0, 320, 314, 320); P(d, 0, 242, 314, 242);                          // rear-chamber port (area-equivalent slot)
-      const kc = ['WinISD:PrecisionDevices PD.1850'].find((k) => LIBMAP.has(k)) || key;
-      d.driverKey = kc;
-      d.drivers.push({ id: ++d.seq, x: 300, y: 665, nx: 0, ny: 1, key: kc, n: 1, wiring: 'parallel' });
-    }
-    if (kind === 'sub184') {
-      // 184 Sub: Rog Mogale's 1 x 18 coupled cavity (speakerplans.com, 2001). 500 x 864 x 615 (464 inside), front recessed 29.
-      // Front chamber (above the baffle): 2 x 150 mm ports, 215 deep; rear chamber: 1 x 150 mm port, 300 deep, 190 up. The
-      // round ports are drawn as slots of the same area. PD 184: 32-116 Hz.
-      d.W = 464; d.panels = []; d.seq = 0;
-      P(d, 0, 855, 615, 855); P(d, 0, 9, 615, 9); P(d, 606, 846, 606, 18);     // top, bottom, back
-      P(d, 47, 645, 597, 645);                                                  // driver baffle
-      P(d, 38, 846, 38, 806); P(d, 38, 694, 38, 654);                          // front-chamber front, split by its ports
-      P(d, 29, 797, 244, 797); P(d, 29, 703, 244, 703);                        // 2 x 150 mm ports as a 76 mm slot, 215 deep
-      P(d, 38, 636, 38, 227); P(d, 38, 153, 38, 18);                           // rear-chamber front, split by its port
-      P(d, 29, 218, 329, 218); P(d, 29, 162, 329, 162);                        // 1 x 150 mm port as a 38 mm slot, 300 deep
-      const k184 = ['WinISD:Precision Devices PD.184'].find((k) => LIBMAP.has(k)) || key;
-      d.driverKey = k184;
-      d.drivers.push({ id: ++d.seq, x: 322, y: 645, nx: 0, ny: 1, key: k184, n: 1, wiring: 'parallel' });
-    }
     if (kind === 'hd15') {
-      // HD 15 Horn: Rog Mogale (speakerplans.com, 2001). 578 x 578 side, 472 wide (436 inside). The 15" on a slanted 420 baffle
-      // fires up the throat beside the back wall, over a 395 mm-radius former (drawn here as one flat board, as asked) and down
-      // to the mouth on the front; the driver's rear sits in the sealed chamber under the former. Designed for stacks of 6+.
+      // HD 15 Horn: Rog Mogale (speakerplans.com, 2001), as reworked here: 618 deep x 578 high, front fully open as the mouth.
+      // The 15" on a slanted 414 mm baffle fires up the throat beside the back wall, over a flat 45 deg former (one board in
+      // place of the 395 mm-radius curve) and out the front; its rear sits in the sealed triangle under the former.
       d.W = 436; d.panels = []; d.seq = 0;
-      P(d, 0, 569, 578, 569); P(d, 0, 9, 578, 9); P(d, 569, 560, 569, 18);     // top, bottom, back
-      P(d, 9, 560, 9, 433);                                                     // front panel above the mouth
-      P(d, 468, 560, 560, 458);                                                 // corner deflector
-      P(d, 18, 50.6, 437, 469.6);                                               // the former, as one flat board (moved out 40 mm so the rear chamber keeps room for the driver)
-      P(d, 360.5, 393, 538, 18);                                                // driver baffle (415; plan 420)
+      P(d, 0, 569, 618, 569); P(d, 15, 9, 618, 9); P(d, 609, 560, 609, 18);    // top, bottom, back
+      P(d, 506, 560, 600, 459);                                                 // corner deflector
+      P(d, 20, 18, 474, 468);                                                   // the former, one flat board
+      P(d, 399.8, 397.8, 566, 18);                                              // driver baffle
       const kh = ['PE:Eminence Kappa Pro-15LF2', 'WinISD:Eminence Kappa PRO 15LF'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = kh;
-      d.drivers.push({ id: ++d.seq, x: 451, y: 201.7, nx: 0.904, ny: 0.427, key: kh, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+      d.drivers.push({ id: ++d.seq, x: 484.6, y: 204.1, nx: 0.9159, ny: 0.4013, key: kh, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+    }
+    if (kind === 's12bp') {
+      // S12BP: B&C Speakers suggested design, 6th-order bandpass for one 12". Drawn from B&C's dimensioned TOP view (the
+      // layout is in the horizontal plane, so the cabinet height is the extrusion): 450 wide x 650 deep x 400 high, 15 mm
+      // birch ply. The driver sits on a cross baffle 230 mm back; the front chamber vents through a 60 mm centre port 130
+      // deep, the rear chamber through two 30 mm side ports running 450 mm back along the sides. Plan: 12BG76 8 ohm (our
+      // closest is the 12BG100). DSP from B&C: HPF 40 Hz BW24, LPF 80 Hz LR24, PEQ +6/44, -4/113, -15/327.
+      d.W = 370; d.t = 15; d.panels = []; d.seq = 0;
+      P(d, 0, 7.5, 650, 7.5); P(d, 0, 442.5, 650, 442.5); P(d, 642.5, 15, 642.5, 435);   // sides, back
+      P(d, 0, 53.5, 450, 53.5); P(d, 0, 396.5, 450, 396.5);                             // side-port boards (30 mm ports, 450 long)
+      P(d, 237.5, 61, 237.5, 389);                                                       // baffle
+      P(d, 22.5, 61, 22.5, 180); P(d, 22.5, 270, 22.5, 389);                             // front panels, recessed 15
+      P(d, 15, 187.5, 130, 187.5); P(d, 15, 262.5, 130, 262.5);                          // centre port (60 wide, 130 deep)
+      const k12 = ['PE:B&C 12BG76', 'PE:B&C 12BG100'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k12;
+      d.drivers.push({ id: ++d.seq, x: 237.5, y: 225, nx: -1, ny: 0, key: k12, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+      d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 40 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
+        peq: [{ on: true, type: 'pk', f: 44, g: 6, q: 3 }, { on: true, type: 'pk', f: 113, g: -4, q: 3 }, { on: true, type: 'pk', f: 327, g: -15, q: 6 },
+          { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }] };
     }
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];

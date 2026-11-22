@@ -29,10 +29,9 @@ To start something new, pick from **Start from — preset —**:
 | **Super Scooper 18" (Rog Mogale)** | Mogale's 18" rear-loaded scoop horn (Precision Devices PD.1850), from his [speakerplans.com drawings](https://www.speakerplans.com/index.php?id=18superscooper): 760 × 1220 × 800 mm, the driver's rear into a lined chamber, up and over a wedge, down the back and round the 550 mm quarter-circle scoop to the mouth at the bottom front (the curve is drawn as six straight pieces). Mogale gives 2.22 m horn length and a 38 Hz cutoff; it simulates −3 dB at 35 Hz. Use a ~30 Hz high-pass. |
 | **Super Scooper 21" (Rog Mogale)** | The 21" version (PD 2150): 798 × 1320 × 636 mm, 2.44 m horn, Mogale's cutoff 35 Hz; simulates −3 dB at 35 Hz. |
 | **186 Horn (Rog Mogale)** | The same folded-horn cabinet as the 1850, with the PD 186 it was drawn for (the PD 1850 is his "extreme SPL" option). |
-| **HD 15 Horn (Rog Mogale)** | Compact 15" horn for stacks of 6+ (Eminence Kappa Pro-15LF2), 578 × 578 × 472 mm. The curved former is one flat board, moved out 40 mm so the driver still fits; simulates −3 dB at 52 Hz (his 52–180 Hz). |
+| **HD 15 Horn (Rog Mogale)** | Compact 15" horn for stacks of 6+ (Eminence Kappa Pro-15LF2), 618 × 578 mm side, front fully open as the mouth; the curved former is one flat 45° board. |
+| **S12BP (B&C Speakers)** | B&C's 6th-order bandpass for one 12", drawn from their top view (450 × 650, 400 high, 15 mm ply), with B&C's DSP settings loaded. B&C specify the 12BG76; our library's closest is the 12BG100. |
 | **G Sub 2×18" (Rog Mogale)** | Dual-18" vented box (2 × PD 186), 536 × 1100 × 670 mm with a 464 × 120 slot port; −3 dB at 35 Hz (his 36.9 Hz). |
-| **C Sub 18" (Rog Mogale)** | Coupled-cavity sub (PD 1850): the driver fires up into a front-open cavity with a shelf; the rear chamber is ported. Round/rectangular ports are drawn as slots of the same area. |
-| **184 Sub (Rog Mogale)** | 1 × 18 coupled cavity (PD 184), 500 × 864 × 615 mm, ported front and rear chambers; −3 dB at 31 Hz (his 32–116 Hz). |
 | *Starting templates* | Tapped horn (3 legs), front-loaded horn, vented box, sealed box, blank. |
 
 The traced designs are approximations for simulation. Build from each designer's own plans.
