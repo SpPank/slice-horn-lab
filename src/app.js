@@ -60,13 +60,39 @@
     if (!opts.noRight) P(d, x1 + h, y0, x1 + h, y1);
   }
   const DEF = window.DEFAULT_PROJECT || null;   // the shipped starting project (data/default_design.json)
+  /** Turn a design so its horn mouth / port faces left (x = min): mirror it if the mouth is on the right, rotate it a
+   *  quarter turn if the mouth is on the top or bottom. Boards, drivers (position, facing, mount side) and hand-drawn paths
+   *  all move together; automatic paths are re-found afterwards. */
+  function faceLeft(d) {
+    if (!d.panels.length) return;
+    let ends;
+    try { ends = HG.autoPaths(d).map((a) => a.pts[a.pts.length - 1]).filter(Boolean); } catch (e) { return; }
+    if (!ends.length) return;
+    const xs = d.panels.flatMap((p) => [p.x1, p.x2]), ys = d.panels.flatMap((p) => [p.y1, p.y2]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const vote = { left: 0, right: 0, bottom: 0, top: 0 };
+    for (const e of ends) { const dist = { left: e.x - x0, right: x1 - e.x, bottom: e.y - y0, top: y1 - e.y }; vote[Object.keys(dist).sort((a, b) => dist[a] - dist[b])[0]]++; }
+    const side = Object.keys(vote).sort((a, b) => vote[b] - vote[a])[0];
+    if (side === 'left') return;
+    let T, N, flip = false;
+    if (side === 'right') { T = (x, y) => [x0 + x1 - x, y]; N = (nx, ny) => [-nx, ny]; flip = true; }
+    else if (side === 'top') { T = (x, y) => [x0 + (y1 - y), y0 + (x - x0)]; N = (nx, ny) => [-ny, nx]; }      // quarter turn anticlockwise
+    else { T = (x, y) => [x0 + (y - y0), y0 + (x1 - x)]; N = (nx, ny) => [ny, -nx]; }                         // quarter turn clockwise
+    for (const p of d.panels) { [p.x1, p.y1] = T(p.x1, p.y1); [p.x2, p.y2] = T(p.x2, p.y2); }
+    for (const q of d.drivers) { [q.x, q.y] = T(q.x, q.y); [q.nx, q.ny] = N(q.nx, q.ny); if (q.mount && flip) q.mount.side = -q.mount.side; }
+    for (const q of d.paths || []) { q.pts = q.pts.map((v) => { const [x, y] = T(v.x, v.y); return { x, y }; }); if (q.opening) { const [x, y] = T(q.opening.x, q.opening.y); q.opening = { x, y }; } }
+    (d.boundaries || []).forEach((b) => { [b.x1, b.y1] = T(b.x1, b.y1); [b.x2, b.y2] = T(b.x2, b.y2); });
+    d.joints = {};   // joint overrides were keyed to the old orientation; let them re-derive
+  }
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
     const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
+    if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
+    else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
     const t = d.t, h = t / 2;
-    const drv = (x, y, nx, ny) => d.drivers.push({ id: ++d.seq, x, y, nx, ny, key, n: 1, wiring: 'parallel' });
+    const drv = (x, y, nx, ny) => d.drivers.push({ id: ++d.seq, x, y, nx, ny, key: d.driverKey, n: 1, wiring: 'parallel' });
     if (kind === 'sealed') {
       d.W = 420; shell(d, 0, 0, 420, 520); drv(420 + h, 260, 1, 0);
     } else if (kind === 'vented') {
@@ -95,11 +121,11 @@
       // rear chamber (left), baffle at x=300, throat chamber, horn flaring to the right
       P(d, -t2, -h, 300, -h); P(d, -t2, 600 + h, 300, 600 + h); P(d, -h, 0, -h, 600);
       P(d, 300 + h, -t2, 300 + h, 600 + t2);   // baffle
-      P(d, 300 + t2, 210 - h, 400, 255 - h);   // throat chamber lower lip
-      P(d, 300 + t2, 390 + h, 400, 345 + h);   // throat chamber upper lip
-      P(d, 400, 255 - h, 1400, 40);            // horn lower wall
-      P(d, 400, 345 + h, 1400, 560);           // horn upper wall
-      d.paths.push({ id: ++d.seq, name: 'A', pts: [{ x: 400, y: 300 }, { x: 1405, y: 300 }], loss: 1 });
+      P(d, 300 + t2, 0, 440, 255 - h);         // compression chamber lower wall (from the box corner: clears any 18" frame)
+      P(d, 300 + t2, 600, 440, 345 + h);       // compression chamber upper wall
+      P(d, 440, 255 - h, 1400, 40);            // horn lower wall
+      P(d, 440, 345 + h, 1400, 560);           // horn upper wall
+      d.paths.push({ id: ++d.seq, name: 'A', pts: [{ x: 440, y: 300 }, { x: 1405, y: 300 }], loss: 1 });
       drv(300 + h, 300, 1, 0);
     } else if (kind === 'h1850') {
       // 1850 folded horn — design by Rog Mogale (speakerplans.com, 2002; plans allow building up to 4 cabs for personal use).
@@ -202,6 +228,7 @@
       d.driverKey = kpd;
       d.drivers.push({ id: ++d.seq, x: 18, y: 960, nx: -1, ny: 0, key: kpd, n: 1, wiring: 'parallel' });
     }
+    if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });
     return d;
