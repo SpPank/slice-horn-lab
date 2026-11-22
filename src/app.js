@@ -2668,7 +2668,21 @@
       root.querySelectorAll('[data-did]').forEach((b) => b.onclick = () => { sel = [{ t: 'driver', id: +b.dataset.did }]; refreshSide(); draw(); });
     } };
   }
-  function refreshSide() { drawChart(); refreshLegend(); stats(); if (!sliding) inspector(); }
+  /** Cabinet width (the dimension into the screen) lives in the pinned top of the side panel, so it is always in reach. */
+  function widthBar() {
+    const el = $('widthBar'); if (!el) return;
+    const wr = widthRange(), u = snapMode().unit;
+    const out = design.W < wr.min ? `Narrower than the driver + 1" (${toU(wr.min)} ${u}); moving the slider brings it into range.`
+      : design.W > wr.max ? `Wider than 2 × the driver (${toU(wr.max)} ${u}); moving the slider brings it into range.` : '';
+    el.title = 'Inside width of the cabinet: how far the side view extends into the screen. The driver sets the limits: its frame + 1" up to 2 × its frame. A new design starts at frame + 3".';
+    el.innerHTML = sliderRow('dsWs', 'Cabinet width', design.W, wr.min, wr.max, snapMode().step) +
+      `<span class="wrange${out ? ' warn' : ''}" id="wRange">${out || `outside ${toU(design.W + 2 * design.t)} · range ${toU(wr.min)}–${toU(wr.max)} ${u}`}</span>`;
+    bindSlider('dsWs', (v) => {
+      const r = widthRange(); design.W = Math.min(r.max, Math.max(r.min, v));
+      const t = $('wRange'); if (t) { t.className = 'wrange'; t.textContent = `outside ${toU(design.W + 2 * design.t)} · range ${toU(r.min)}–${toU(r.max)} ${snapMode().unit}`; }
+    }, false, el);
+  }
+  function refreshSide() { drawChart(); refreshLegend(); stats(); if (!sliding) { widthBar(); inspector(); } }
   function inspector() {
     const el = $('insp'); let h = '';
     const one = sel.length === 1 ? sel[0] : null;
@@ -2822,10 +2836,7 @@
     h += `<h3>Parts <label class="row" style="text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="showLbl"> always show names</label></h3>
       <div class="parts">${pl.html || '<div class="note">No boards yet. Pick the board tool (P) and drag a line on the grid.</div>'}</div>
       <div class="note">Slide to change a board's length (it grows from its start end; select a board for angle, position and which end it grows from). Hover a board's middle for its name, anywhere else on it for its length. Names marked <span class="auto">auto</span> were worked out from the drawing; click one and choose a role to override.</div>`;
-    const wr = widthRange();
     h += `<h3>Design <span class="pill">${esc(design.name)}</span></h3>
-      ${sliderRow('dsWs', 'Cabinet width (inside, into the screen)', design.W, wr.min, wr.max, snapMode().step)}
-      <div class="note">From the driver + 1" (${toU(wr.min)}) to 2 × the driver (${toU(wr.max)}) ${snapMode().unit}; a new design starts at the driver + 3".${design.W < wr.min ? ` This design was published ${toU(wr.min - design.W)} ${snapMode().unit} narrower than that minimum; moving the slider brings it into range.` : ''}</div>
       <div class="grid2">
         <label>Name <input type="text" id="dsName" value="${esc(design.name)}"></label>
         <label>Board thickness ${numIn('dsT', toU(design.t))}</label>
@@ -2846,7 +2857,6 @@
     $('dsMat').value = design.material; $('dsSpace').value = String(design.space); $('dsLoss').value = design.losses ? '1' : '0'; $('dsAuto').checked = !!design.autoCenter;
     const on = (id, fn) => $(id).onchange = (e) => { commit(); fn(e.target); changed(); };
     on('dsName', (t) => design.name = t.value || 'Untitled');
-    bindSlider('dsWs', (v) => { const r = widthRange(); design.W = Math.min(r.max, Math.max(r.min, v)); });
     on('dsT', (t) => design.t = Math.max(3, parseL(t.value)));
     on('dsMat', (t) => design.material = t.value);
     on('dsSpace', (t) => design.space = +t.value);
