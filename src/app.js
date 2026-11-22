@@ -87,7 +87,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', s21hl: 'S21HL (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', s21hl: 'S21HL (B&C Speakers)', s218bp: 'S218BP (B&C Speakers)', s21ib: 'S21IB (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
     else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
@@ -328,6 +328,90 @@
       d.drivers.push({ id: ++d.seq, x: 459, y: 128.6, nx: 0.2588, ny: -0.9659, key: k21, n: 1, wiring: 'parallel' });
       d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 28 }, lp: { on: true, type: 'BW', order: 4, f: 100 }, gain: 4,
         peq: [{ on: true, type: 'pk', f: 35, g: 6, q: 1 }, { on: true, type: 'pk', f: 60, g: 3, q: 3 }, { on: true, type: 'pk', f: 105, g: 3, q: 6 }, { on: true, type: 'pk', f: 130, g: -6, q: 3 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
+    }
+    if (kind === 's218bp') {
+      // S218BP: B&C Speakers suggested design, 6th-order bandpass, 2 x 18DS115 8 ohm, 15 mm birch ply, 1200 W x 800 D x 520 H outside.
+      // Drawn as the TOP view (x = depth from the open front, y = across the width); extrusion = 520 - 2 x 15 = 490. No front panel.
+      // Each driver is rear-mounted on a baffle running front-to-back 140 mm in from its side panel. The cone fires outward into a
+      // 140 x 470 side chamber (~32 L each) that runs forward into a 92 mm side port (~300 mm long) exiting at the front corners.
+      // Both motors share one rear chamber (~270 L gross): both front "U" boxes behind the recessed front boards plus the back-centre
+      // region. It vents through the centre hourglass mid port (~280 mouth, 163 throat, ~495 long) that exits mid-front.
+      // Board positions come from the routed base grooves (DXF 03). Omitted because they barely change the airspace: the 2+2 side-port
+      // and 2 mid-port horizontal shelves, the front-chamber shelves, the 125 mm vertical stub on each mid-port wall (VerticalChamber-Reinf),
+      // the 40 mm back-centre strips, and the access-panel support/reinforcement frame.
+      // Not modelled (1-D limit): B&C's mandatory 160 H x 35 mm slot in each mid-port wall at the MidReflex-1/-2 joint (x ~347).
+      // This slot leaks the port's middle into the rear chamber.
+      d.W = 490; d.t = 15; d.panels = []; d.seq = 0;
+      P(d, 0, 7.5, 800, 7.5);            // left side panel, full depth
+      P(d, 0, 1192.5, 800, 1192.5);      // right side panel, full depth
+      P(d, 792.5, 15, 792.5, 1185);      // back panel (access panel sits flush in it), between the side-panel faces
+      // ---- left half ----
+      P(d, 73.1, 114.5, 315, 114.5);     // side-port inner wall (SideReflex): 92 mm side port y 15..107, runs back to Chamber-2's rear face
+      P(d, 307.5, 122, 307.5, 155);      // Chamber-2 jog: steps the channel from 92 (port) to 140 (front chamber)
+      P(d, 300, 162.5, 785, 162.5);      // driver baffle (490 long), ends on the back-panel face
+      P(d, 73.1, 114.5, 27.5, 160.1);    // 45 deg side-port bend (SideReflexBend), corner of the front U box
+      P(d, 27.5, 160.1, 27.5, 451.9);    // front board of the U box, recessed 20 mm behind the front face
+      P(d, 27.5, 451.9, 180, 510.9);     // mid-port wall 1, flares from the mouth (MidReflex-3)
+      P(d, 180, 510.9, 347.1, 510.9);    // mid-port wall 2, straight throat (163.2 clear), MidReflex-2
+      P(d, 347.1, 510.9, 495, 453.6);    // mid-port wall 3, flares out to the rear-chamber mouth (MidReflex-1)
+      // ---- right half (mirror, y -> 1200 - y) ----
+      P(d, 73.1, 1085.5, 315, 1085.5);   // side-port inner wall
+      P(d, 307.5, 1078, 307.5, 1045);    // Chamber-2 jog
+      P(d, 300, 1037.5, 785, 1037.5);    // driver baffle
+      P(d, 73.1, 1085.5, 27.5, 1039.9);  // 45 deg side-port bend
+      P(d, 27.5, 1039.9, 27.5, 748.1);   // front board of the U box
+      P(d, 27.5, 748.1, 180, 689.1);     // mid-port wall 1 (mouth flare)
+      P(d, 180, 689.1, 347.1, 689.1);    // mid-port wall 2 (throat)
+      P(d, 347.1, 689.1, 495, 746.4);    // mid-port wall 3 (rear flare)
+      // hand-drawn air paths (the automatic finder misses the two side ports in this layout): the mid port out of the shared
+      // rear chamber, and each front chamber running into its side port
+      d.autoPaths = false;
+      d.paths = [
+        { id: ++d.seq, name: 'A', pts: [{ x: 490, y: 600 }, { x: 347, y: 600 }, { x: 180, y: 600 }, { x: -4, y: 600 }], loss: 1 },
+        { id: ++d.seq, name: 'B', pts: [{ x: 775, y: 85 }, { x: 320, y: 85 }, { x: 300, y: 61 }, { x: -4, y: 61 }], loss: 1 },
+        { id: ++d.seq, name: 'C', pts: [{ x: 775, y: 1115 }, { x: 320, y: 1115 }, { x: 300, y: 1139 }, { x: -4, y: 1139 }], loss: 1 },
+      ];
+      const k18 = ['PE:B&C 18DS115 8Ω', 'PE:B&C 18DS115 [sheet]', 'PE:B&C 18DS115'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k18;
+      // Hole centre is 250 from the baffle's front (rabbeted) end, so x = 550. The driver spans x 320..780 and the motor reaches
+      // about y 405 (left) / 795 (right), clear of the mid-port walls (which end at x 495). Cones face the side walls.
+      d.drivers.push({ id: ++d.seq, x: 550, y: 162.5, nx: 0, ny: -1, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+      d.drivers.push({ id: ++d.seq, x: 550, y: 1037.5, nx: 0, ny: 1, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+      d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 29 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
+        peq: [{ on: true, type: 'pk', f: 33, g: 3, q: 3 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
+    }
+    if (kind === 's21ib') {
+      // S21IB: B&C Speakers suggested design "Extended LF Reflex Isobaric Subwoofer", 1 x 21DS115 + 2 x 18DS115 (8 ohm),
+      // from B&C's PDF and panel DXFs. 900 wide x 600 high x 750 deep outside, 15 mm birch ply, 570 mm inside height.
+      // Drawn as the TOP view (plan) at mid-height: x = depth from the front face (front on the left), y = across the
+      // width; the extrusion is the 570 mm inside height. The 21 fires out of the front baffle. Behind it a 90 deg V of two
+      // boards (apex 398 mm back) closes the sealed isobaric coupling chamber (~79 L); an 18DS115 sits on each leg, cone
+      // facing into the coupling chamber (the 21's rear), basket and magnet in the reflex chamber (~254 L), which wraps
+      // round behind and outside the V. Ports: two triangular tunnels (227.7 mm legs, 259 cm2 each) in the bottom front
+      // corners, 335 mm long from the front face, opening into the reflex chamber beside the side walls. A plan section
+      // can't show them, so each is a slot along a side wall. The true equivalent (45.5 mm x 335 mm) would put the 18s'
+      // magnets in the slot (in the real cab they sit above the tunnels), so the slots are 37 mm x 255 mm instead: same
+      // tuning in the sim (fb 36.7 vs 36.8 Hz; B&C's impedance minimum is at ~35 Hz). Left out: handles, grille, feet, the
+      // corner the V legs lose at the bottom where they sit on the port boards, and the two 70 mm wiring holes near the top
+      // of the V legs (taken as sealed after wiring; open, they would short the 18s' two sides together at LF and the
+      // impedance would no longer match B&C's). B&C: -3 dB @ 28 Hz, CEA-2010B 136 dB peak @ 1 m half-space. All three
+      // drivers identically powered/processed (one or two amp channels); B&C's impedance curve is all three in parallel
+      // (2.7 ohm min), the same as here.
+      d.W = 570; d.t = 15; d.panels = []; d.seq = 0;
+      P(d, 0, 7.5, 750, 7.5); P(d, 0, 892.5, 750, 892.5);      // side walls (full 750 depth)
+      P(d, 742.5, 15, 742.5, 885);                              // back
+      P(d, 0, 59.5, 255, 59.5); P(d, 0, 840.5, 255, 840.5);     // port boards: 37 mm slots along the side walls, open at the front
+      P(d, 7.5, 67, 7.5, 833);                                  // front baffle (21DS115), between the port boards
+      P(d, 14.9, 67, 403.2, 455.3);                             // V leg 1, 45 deg, from the port board to the apex tip
+      P(d, 14.9, 833, 392.6, 455.3);                            // V leg 2, butts into leg 1's face at the apex
+      const k21 = ['PE:B&C 21DS115 8Ω', 'PE:B&C 21DS115 [sheet]'].find((k) => LIBMAP.has(k)) || key;
+      const k18 = ['PE:B&C 18DS115 8Ω', 'PE:B&C 18DS115 [sheet]'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k21;
+      d.drivers.push({ id: ++d.seq, x: 7.5, y: 450, nx: -1, ny: 0, key: k21, n: 1, wiring: 'parallel' });                  // 21DS115, fires out of the front
+      d.drivers.push({ id: ++d.seq, x: 206.4, y: 258.5, nx: -0.7071, ny: 0.7071, key: k18, n: 1, wiring: 'parallel' });   // 18DS115 on leg 1, cone into the coupling chamber
+      d.drivers.push({ id: ++d.seq, x: 206.4, y: 641.5, nx: -0.7071, ny: -0.7071, key: k18, n: 1, wiring: 'parallel' });  // 18DS115 on leg 2
+      d.dsp = { hp: { on: true, type: 'BW', order: 2, f: 30 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
+        peq: [{ on: true, type: 'pk', f: 34, g: 3, q: 4 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
     }
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];
