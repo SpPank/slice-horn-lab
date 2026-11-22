@@ -25,6 +25,7 @@ To start something new, pick from **Start from — preset —**:
 | **1850 folded horn (Rog Mogale)** | Traced from the published side view. |
 | **SKRAM 21" (Josh Ricci)** | Josh Ricci's single-21" sub (B&C 21DS115), from his panel layout and 3-D model. Windowed braces and the three vent dividers are left out; the model's vent tuning comes out at about 32 Hz against the published 29.5 Hz with all vents open. |
 | **Skhorn 2×21" (Josh Ricci)** | Josh Ricci's dual-opposed 21" sub (2 × B&C 21DS115), sliced from his 3-D model: the drivers fire into a shared wedge throat that turns out to a horn mouth at each end of the front, and each rear chamber has a 3" slot vent. The model's vent tuning comes out at 28.6 Hz against the published 29 Hz (all vents open). |
+| **BC118 (All_1)** | All_1's one-driver half of Tom Danley's BC218 (B&C 18SW115, 1500 × 750 × 750 mm), from the dimensioned side view in his diyAudio thread. The driver fires into a 28 mm compression slot that folds back on itself before expanding to the mouth; the real cab's "half-moon" exit can't be drawn in 2-D, so the mouth is the plain right face. Simulates −3 dB at 27 Hz (his target: 28 Hz). |
 | *Starting templates* | Tapped horn (3 legs), front-loaded horn, vented box, sealed box, blank. |
 
 The traced designs are approximations for simulation. Build from each designer's own plans.
@@ -192,7 +193,7 @@ The default project is `data/default_design.json`. Replace its `design` with any
 
 ## Credits and data
 
-- **SKRAM** and **Skhorn** are designed by Josh Ricci (ZOD Audio); the SKRAM plans were shared by [TinkerandParty](https://tinkerandparty.com/) and the Skhorn plans are hosted by [JW Sound](https://www.jwsound.live/designs/riccis-skhorn-subwoofer), both with his permission. Please credit Josh if you use it commercially. **18" tapped horn** design by Speaker Box Maker; **1850 folded horn** by Rog Mogale.
+- **SKRAM** and **Skhorn** are designed by Josh Ricci (ZOD Audio); the SKRAM plans were shared by [TinkerandParty](https://tinkerandparty.com/) and the Skhorn plans are hosted by [JW Sound](https://www.jwsound.live/designs/riccis-skhorn-subwoofer), both with his permission. Please credit Josh if you use it commercially. **18" tapped horn** design by Speaker Box Maker; **1850 folded horn** by Rog Mogale. **BC118** by All_1 on diyAudio ([thread](https://www.diyaudio.com/community/threads/boundary-control-bc-subwoofer-bc218-2-design.413237/)), after Tom Danley's BC218.
 - Acoustic model after David McBean's **Hornresp**; this is an independent re-implementation, not affiliated with it.
 - Advanced driver model after Thorborg & Futtrup, *JAES* 2011.
 - Driver data from Parts Express product listings and B&C, Eminence, Faital Pro and Lavoce data sheets. Check critical numbers against the current manufacturer data sheet.

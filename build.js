@@ -66,6 +66,16 @@ if (fs.existsSync(mfr)) {
     }
   } catch (e) { console.warn('mfr_drivers.json not readable yet:', e.message); }
 }
+// Impedance variants of the same driver share one frame: borrow a traced outline from a sibling (same brand, same base
+// model, same frame diameter and depth) when an entry has none of its own.
+{
+  const base = (d) => (d.b || '') + '|' + String(d.m || '').replace(/\s*\(spec sheet\)|\s*\(discontinued\)/g, '').replace(/\s*\d+\s*Ω$/, '').replace(/-(4|8|16)$/, '').trim().toUpperCase();
+  const fit = (a, b) => !a.dims || !b.dims || ((!a.dims.outer_dia || !b.dims.outer_dia || Math.abs(a.dims.outer_dia - b.dims.outer_dia) < 3) && (!a.dims.depth_total || !b.dims.depth_total || Math.abs(a.dims.depth_total - b.dims.depth_total) < 4));
+  const withProf = new Map(); for (const d of lib) if (d.prof) { const k = base(d); if (!withProf.has(k)) withProf.set(k, []); withProf.get(k).push(d); }
+  let shared = 0;
+  for (const d of lib) if (!d.prof) { const sib = (withProf.get(base(d)) || []).find((q) => fit(d, q)); if (sib) { d.prof = sib.prof; shared++; } }
+  console.log(`outlines shared between impedance variants: ${shared}`);
+}
 for (const d of lib) for (const k of Object.keys(d)) if (d[k] === undefined) delete d[k];
 let defJs = '';
 try { const dd = JSON.parse(fs.readFileSync(path.join(root, 'data', 'default_design.json'), 'utf8')); defJs = 'window.DEFAULT_PROJECT=' + JSON.stringify(dd) + ';'; } catch (e) { console.warn('no default_design.json:', e.message); }

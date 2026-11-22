@@ -63,7 +63,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     const t = d.t, h = t / 2;
     const drv = (x, y, nx, ny) => d.drivers.push({ id: ++d.seq, x, y, nx, ny, key, n: 1, wiring: 'parallel' });
@@ -165,6 +165,23 @@
       d.driverKey = k21;
       d.drivers.push({ id: ++d.seq, x: 473, y: 599.9, nx: -0.0985, ny: 0.9951, key: k21, n: 1, wiring: 'parallel' });
       d.drivers.push({ id: ++d.seq, x: 473.3, y: 774, nx: -0.1116, ny: -0.9938, key: k21, n: 1, wiring: 'parallel' });
+    }
+    if (kind === 'bc118') {
+      // BC118: a one-driver half of Tom Danley's BC218, designed by All_1 on diyaudio.com ("Boundary control BC subwoofer
+      // BC218/2 Design" thread), traced from his dimensioned side view. 1500 x 750 outside, 750 wide (714 inside), 18 mm.
+      // The 18SW115 hangs under the lower baffle and fires up into a 28 mm compression slot, which runs down to the floor,
+      // turns 180 deg up round the end of the board above, runs back up-left under the top fold, wraps over its left end
+      // and expands to the mouth on the right face. The real cab's "half-moon" exit can't be drawn in 2-D (nor modelled in
+      // Hornresp), so the mouth here is the plain right face.
+      d.W = 714; d.panels = []; d.seq = 0;
+      P(d, 0, 741, 1500, 741); P(d, 0, 9, 1500, 9); P(d, 9, 732, 9, 18);        // top, bottom, closed left end
+      P(d, 190.8, 538.3, 1021.2, 333.7); P(d, 1021.2, 333.7, 1469.3, 18);     // top fold board (two pieces)
+      P(d, 18, 381.8, 976.4, 206.5); P(d, 976.4, 206.5, 1164.8, 72.7);        // slot roof (stops short of the floor)
+      P(d, 18, 336.3, 944.3, 127.3); P(d, 944.3, 127.3, 1065.4, 18);          // driver baffle (two pieces)
+      P(d, 1223.5, 18, 1223.5, 180); P(d, 1163, 18, 1214.5, 103);             // closing board + 100 mm brace (dead pocket)
+      const k18 = ['PE:B&C 18SW115', 'PE:B&C 18SW115-4 [sheet]', 'WinISD:B&C 18SW115-4'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k18;
+      d.drivers.push({ id: ++d.seq, x: 254.2, y: 283, nx: 0.22, ny: 0.9755, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
     }
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });
