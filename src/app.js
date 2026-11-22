@@ -1048,9 +1048,12 @@
     // orthogonal lock from an anchor
     let ortho = null;
     if (opt.from && !opt.free) {
+      // a narrow magnetic band, not a wide cone: the cursor has to sit within ~5 screen px of the straight (0/45/90 deg)
+      // line AND within 2.5 deg of it, so a long board leaves the lock with a small sideways nudge (Alt turns it off)
       const dx = wx - opt.from.x, dy = wy - opt.from.y, ang = Math.atan2(dy, dx), st = Math.PI / 4;
-      const a2 = Math.round(ang / st) * st;
-      if (Math.abs(ang - a2) < 6 * Math.PI / 180) ortho = { x: Math.cos(a2), y: Math.sin(a2) };
+      const a2 = Math.round(ang / st) * st, ux = Math.cos(a2), uy = Math.sin(a2);
+      const off = Math.abs(dx * uy - dy * ux) * view.k;
+      if (off < 5 && Math.abs(ang - a2) < 2.5 * Math.PI / 180) ortho = { x: ux, y: uy };
     }
     if (!opt.noObjects) {
       for (const { q } of quads) for (const [a, b] of HG.quadEdges(q)) {
