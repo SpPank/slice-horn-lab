@@ -47,7 +47,7 @@
     }
     return q;
   }
-  const JOINT_TYPES = ['auto', 'miter', 'square']; // plus 'through:<board id>'
+  const JOINT_TYPES = ['auto', 'miter', 'square']; // plus 'through:<board id>' and 'butt:<board id>'
   /** Find board ends that meet at a corner and work out how they are cut.
    *  auto: the board closest to the grid direction runs through to the outside corner; the other butts into
    *  its face, its end cut parallel to that face. Two square boards: the horizontal one runs through. */
@@ -97,7 +97,22 @@
         const T = tid === A.p.id ? A : B, U = T === A ? B : A, ft = T === A ? fa : fb, fu = T === A ? fb : fa;
         const sT = T === A ? sA : sB, sU = T === A ? sB : sA;
         setCut(U.p.id, U.e, face(T.p, ft, sT));   // butting board stops flush against the through board's face
-        setCut(T.p.id, T.e, face(U.p, fu, -sU));  // through board runs on to the butting board's outside face
+        if (!resolved.startsWith('butt:')) setCut(T.p.id, T.e, face(U.p, fu, -sU));  // through: runs on to the butting board's outside face; butt: keeps its own square end
+      }
+    }
+    // consecutive pieces of one curved board (p.arc): mitre them on the bisector so the bend is one continuous band
+    {
+      const byArc = new Map();
+      for (const p of design.panels) if (p.arc != null) { if (!byArc.has(p.arc)) byArc.set(p.arc, []); byArc.get(p.arc).push(p); }
+      for (const segs of byArc.values()) {
+        segs.sort((u, v) => u.seg - v.seg);
+        for (let i = 0; i + 1 < segs.length; i++) {
+          const p1 = segs[i], p2 = segs[i + 1], k1 = p1.id + ':2', k2 = p2.id + ':1';
+          if (used.has(k1) || used.has(k2)) continue;
+          const f1 = fr(p1), f2 = fr(p2), mx = f1.ux + f2.ux, my = f1.uy + f2.uy, L = len(mx, my) || 1;
+          const line = { x: p1.x2, y: p1.y2, dx: -my / L, dy: mx / L };
+          setCut(p1.id, 2, line); setCut(p2.id, 1, line); used.add(k1); used.add(k2);
+        }
       }
     }
     // T-joints: a board end that lands on the face of another board (away from that board's ends) is cut at the

@@ -782,7 +782,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     }
     return q;
   }
-  const JOINT_TYPES = ['auto', 'miter', 'square']; // plus 'through:<board id>'
+  const JOINT_TYPES = ['auto', 'miter', 'square']; // plus 'through:<board id>' and 'butt:<board id>'
   /** Find board ends that meet at a corner and work out how they are cut.
    *  auto: the board closest to the grid direction runs through to the outside corner; the other butts into
    *  its face, its end cut parallel to that face. Two square boards: the horizontal one runs through. */
@@ -832,7 +832,22 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         const T = tid === A.p.id ? A : B, U = T === A ? B : A, ft = T === A ? fa : fb, fu = T === A ? fb : fa;
         const sT = T === A ? sA : sB, sU = T === A ? sB : sA;
         setCut(U.p.id, U.e, face(T.p, ft, sT));   // butting board stops flush against the through board's face
-        setCut(T.p.id, T.e, face(U.p, fu, -sU));  // through board runs on to the butting board's outside face
+        if (!resolved.startsWith('butt:')) setCut(T.p.id, T.e, face(U.p, fu, -sU));  // through: runs on to the butting board's outside face; butt: keeps its own square end
+      }
+    }
+    // consecutive pieces of one curved board (p.arc): mitre them on the bisector so the bend is one continuous band
+    {
+      const byArc = new Map();
+      for (const p of design.panels) if (p.arc != null) { if (!byArc.has(p.arc)) byArc.set(p.arc, []); byArc.get(p.arc).push(p); }
+      for (const segs of byArc.values()) {
+        segs.sort((u, v) => u.seg - v.seg);
+        for (let i = 0; i + 1 < segs.length; i++) {
+          const p1 = segs[i], p2 = segs[i + 1], k1 = p1.id + ':2', k2 = p2.id + ':1';
+          if (used.has(k1) || used.has(k2)) continue;
+          const f1 = fr(p1), f2 = fr(p2), mx = f1.ux + f2.ux, my = f1.uy + f2.uy, L = len(mx, my) || 1;
+          const line = { x: p1.x2, y: p1.y2, dx: -my / L, dy: mx / L };
+          setCut(p1.id, 2, line); setCut(p2.id, 1, line); used.add(k1); used.add(k2);
+        }
       }
     }
     // T-joints: a board end that lands on the face of another board (away from that board's ends) is cut at the
@@ -1712,7 +1727,50 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     for (const q of d.paths || []) { q.pts = q.pts.map((v) => { const [x, y] = T(v.x, v.y); return { x, y }; }); if (q.opening) { const [x, y] = T(q.opening.x, q.opening.y); q.opening = { x, y }; } }
     (d.boundaries || []).forEach((b) => { [b.x1, b.y1] = T(b.x1, b.y1); [b.x2, b.y2] = T(b.x2, b.y2); });
     (d.arcs || []).forEach((g) => { for (const k of ['a', 'm', 'b']) { const [x, y] = T(g[k].x, g[k].y); g[k] = { x, y }; } });
-    d.joints = {};   // joint overrides were keyed to the old orientation; let them re-derive
+  }
+  /** Mogale Super Scooper (18" and 21"): every board is worked out from the drawing's own dimensions (g, in mm, y up from the
+   *  outside bottom), as centre-lines that end where the joints are, and each joint is set the way Mogale cuts it. */
+  function buildScooper(d, g, key) {
+    const t = 18, h = 9, D = g.D, H = g.H, rad = Math.PI / 180;
+    const U = (ax, ay, bx, by) => { const L = Math.hypot(bx - ax, by - ay); return { x: ax, y: ay, ux: (bx - ax) / L, uy: (by - ay) / L }; };   // line from a toward b
+    const off = (l, k) => ({ ...l, x: l.x - l.uy * k, y: l.y + l.ux * k });                                                                    // moved k to the left of its direction
+    const X = (a, b) => { const den = a.ux * b.uy - a.uy * b.ux, k = ((b.x - a.x) * b.uy - (b.y - a.y) * b.ux) / den; return [a.x + a.ux * k, a.y + a.uy * k]; };
+    const vert = (x) => ({ x, y: 0, ux: 0, uy: 1 }), horiz = (y) => ({ x: 0, y, ux: 1, uy: 0 }), r1 = (v) => Math.round(v * 10) / 10;
+    const B = (a, b) => { d.panels.push({ id: ++d.seq, x1: r1(a[0]), y1: r1(a[1]), x2: r1(b[0]), y2: r1(b[1]) }); return d.seq; };
+    d.W = g.W; d.panels = []; d.arcs = []; d.seq = 0; d.joints = {};
+    B([0, H - h], [D, H - h]); B([0, h], [D, h]); B([D - h, H - t], [D - h, t]);                 // top, bottom, back
+    // the V under the chamber: its lower faces meet at the vertex (g.vx, g.vy)
+    const vlLow = U(g.rec, g.baffleBot, g.vx, g.vy), vrLow = U(g.vx, g.vy, g.cx, g.cy), vlC = off(vlLow, h), vrC = off(vrLow, h), vrUp = off(vrLow, t);
+    const Jb = X(vlC, vert(g.rec + h)), Jv = X(vlC, vrC);
+    // the wedge: outer faces from its top corners; the right board's outer face runs on down the end of the V
+    const wrOut = U(g.wrx, g.wry, g.cx, g.cy), wrC = off(wrOut, -h), wrIn = off(wrOut, -t);
+    const a = g.wlLean * rad, wlOut = { x: g.wlx, y: g.wly, ux: -Math.sin(a), uy: -Math.cos(a) }, wlC = off(wlOut, h), wlIn = off(wlOut, t);
+    const Jw = X(vrC, wrC), topPl = U(g.wlx, g.wly, g.wrx, g.wry), capC = off(topPl, -h);
+    const baffle = B([g.rec + h, H - t], Jb), vl = B(Jb, Jv), vr = B(Jv, Jw);                    // baffle (set back g.rec), V left, V right
+    // chamber wall and the two-piece hook at its foot
+    const wall = B([g.wall + h, H - t], [g.wall + h, g.wallBot]);
+    const tip = g.tip || X(U(g.wall, g.hookTop, g.wall - 1, g.hookTop - Math.tan(g.hook1 * rad)), U(g.wall, g.wallBot, g.wall - 1, g.wallBot + Math.tan(g.hook2 * rad)));
+    const h1C = off(U(g.wall, g.hookTop, tip[0], tip[1]), h), h2C = off(U(g.wall, g.wallBot, tip[0], tip[1]), -h), Jh = X(h1C, h2C);
+    const hook1 = B(X(h1C, vert(g.wall)), Jh), hook2 = B(Jh, X(h2C, vert(g.wall)));
+    // 45 deg corner deflectors: the long face looks into the horn
+    const cl = off(U(g.wall + t, g.clY, g.clX, H - t), h), cr = off(U(g.crX, H - t, D - t, g.crY), h);
+    B(X(cl, vert(g.wall + t)), X(cl, horiz(H - t))); B(X(cr, horiz(H - t)), X(cr, vert(D - t)));
+    // wedge boards (the right one first, so its foot pairs with the end of the V), then the cap that fits between their tops
+    const wr = B(X(wrC, topPl), Jw), wl = B([g.wlx + h * Math.cos(a), g.wly - h * Math.sin(a)], X(wlC, vrUp)), cap = B(X(capC, wlIn), X(capC, wrIn));
+    // the scoop: inner radius g.rIn about (g.acx, g.acy), from the back panel round to the floor
+    const R = g.rIn + h, ax = D - t, ay = g.acy - Math.sqrt(R * R - (ax - g.acx) ** 2), bx = g.acx + Math.sqrt(R * R - (g.acy - t) ** 2);
+    const tm = (Math.atan2(ay - g.acy, ax - g.acx) + Math.atan2(t - g.acy, bx - g.acx)) / 2;
+    ARC(d, r1(ax), r1(ay), r1(g.acx + R * Math.cos(tm)), r1(g.acy + R * Math.sin(tm)), r1(bx), t);
+    // joints, as on the mitre-angle sheet
+    const J = (ia, ib, type) => { const j = HG.computeJoints(d).find((q) => !q.tee && ((q.a.id === ia && q.b.id === ib) || (q.a.id === ib && q.b.id === ia))); if (j) d.joints[j.key] = type; };
+    J(baffle, vl, 'miter');                 // baffle foot on the V (41 / 19 deg)
+    J(vl, vr, 'through:' + vl);             // left V board runs through, right one butts under it (38 / 38 deg)
+    J(vr, wr, 'through:' + vr);             // wedge sits on the V (36 deg); the V's end follows the wedge's outer face (36 deg)
+    J(hook1, hook2, 'miter');               // hook tip
+    J(hook2, wall, 'butt:' + wall);         // hook closes onto the wall's foot; the wall stays square
+    J(cap, wl, 'butt:' + wl); J(cap, wr, 'butt:' + wr);   // cap fits between the wedge boards
+    d.driverKey = key;
+    d.drivers.push({ id: ++d.seq, x: g.rec + h, y: g.drvY, nx: -1, ny: 0, key, n: 1, wiring: 'parallel' });
   }
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
@@ -1840,37 +1898,22 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       d.drivers.push({ id: ++d.seq, x: 254.2, y: 283, nx: 0.22, ny: 0.9755, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
     }
     if (kind === 'scooper') {
-      // Super Scooper: Rog Mogale's 18" rear-loaded scoop horn, from his speakerplans.com drawings (side view, panel
-      // lengths, flare angles). 760 deep x 1220 high x 800 wide (764 inside), 18 mm birch ply, 36 mm double front baffle.
-      // The driver's rear fires into the lined chamber behind the baffle, the horn runs up the central channel, over the
-      // wedge (under the 45 deg corner board), down the back and round the 550 mm quarter-circle scoop to the 639 mm mouth at
-      // the bottom front. Mogale: horn length 2.22 m, cutoff 38 Hz, high-pass at ~30 Hz. Braces are omitted.
-      d.W = 764; d.panels = []; d.seq = 0;
-      P(d, 0, 1211, 760, 1211); P(d, 0, 9, 760, 9); P(d, 751, 1202, 751, 18);   // top, bottom, back
-      P(d, 18, 1202, 18, 657); d.panels[d.panels.length - 1].t = 36;            // double front baffle (mouth below it)
-      P(d, 231, 1202, 231, 717);                                                 // chamber wall (485), 186 mm behind the baffle's inner face
-      P(d, 240, 1089, 353, 1202); P(d, 630, 1202, 742, 1092);                    // 45 deg corner deflectors (152, 158)
-      P(d, 448, 1028, 464, 620); P(d, 545, 1023, 473, 620); P(d, 448, 1028, 545, 1023);   // wedge (405, 406, cap)
-      P(d, 36, 657, 250, 532); P(d, 250, 532, 466, 620);                         // the V (260, 228)
-      ARC(d, 733, 532, 591.5, 174.9, 250, 27);   // the 550 mm scoop, one bent-ply arc
-      const kpd = ['WinISD:PrecisionDevices PD.1850'].find((k) => LIBMAP.has(k)) || key;
-      d.driverKey = kpd;
-      d.drivers.push({ id: ++d.seq, x: 18, y: 960, nx: -1, ny: 0, key: kpd, n: 1, wiring: 'parallel' });
+      // Super Scooper 18": Rog Mogale's rear-loaded scoop horn (speakerplans.com), every board from his side view, panel
+      // lengths, flare angles and mitre angles. 760 deep x 1220 high x 636 wide (600 inside), 18 mm birch ply.
+      // Baffle set back 36 mm; lined chamber behind it; the horn leaves under the chamber wall (past its two-piece hook),
+      // climbs between the wall and the wedge (3 deg), turns over the wedge under the two 45 deg deflectors, drops down the
+      // back (14 deg) and sweeps round the 550 mm-radius scoop to the 639 mm mouth. Horn length 2.22 m, cutoff 38 Hz;
+      // Mogale says to high-pass at about 30 Hz. The blue braces on his drawing are left out (they don't close the air).
+      buildScooper(d, { D: 760, H: 1220, W: 600, rec: 36, baffleBot: 657, vx: 250, vy: 534, cx: 460, cy: 620, wall: 256, wallBot: 717, hookTop: 817, hook1: 45, hook2: 18,
+        clY: 1094, clX: 382, crX: 631, crY: 1091, wlx: 443, wly: 1028, wlLean: 3, wrx: 554, wry: 1023, acx: 191, acy: 566, rIn: 550, drvY: 949 },
+        ['WinISD:PrecisionDevices PD.1850'].find((k) => LIBMAP.has(k)) || key);
     }
     if (kind === 'scooper21') {
-      // 21" Super Scooper: Rog Mogale's 21" rear-loaded scoop (speakerplans.com), same layout as the 18". 798 deep x 1320 high
-      // x 636 wide (600 inside), 18 mm birch ply, 36 mm front. Mogale: horn length 2.44 m, cutoff 35 Hz, use a ~30 Hz high-pass.
-      d.W = 600; d.panels = []; d.seq = 0;
-      P(d, 0, 1311, 798, 1311); P(d, 0, 9, 798, 9); P(d, 789, 1302, 789, 18);   // top, bottom, back
-      P(d, 18, 1302, 18, 700); d.panels[d.panels.length - 1].t = 36;           // double front baffle (mouth below it)
-      P(d, 303, 1302, 303, 797);                                                // chamber wall
-      P(d, 312, 1192, 422, 1302); P(d, 667, 1302, 780, 1189);                  // 45 deg corner deflectors
-      P(d, 480, 1114, 490, 653); P(d, 591, 1116, 500, 653); P(d, 480, 1114, 591, 1116);   // wedge
-      P(d, 36, 700, 287, 567); P(d, 287, 567, 495, 653);                       // the V
-      ARC(d, 771.1, 528.9, 615.4, 193.5, 285.7, 26.2);   // the 574 mm scoop, one bent-ply arc
-      const k21 = ['WinISD:Precision Devices PD.2150'].find((k) => LIBMAP.has(k)) || key;
-      d.driverKey = k21;
-      d.drivers.push({ id: ++d.seq, x: 18, y: 1028, nx: -1, ny: 0, key: k21, n: 1, wiring: 'parallel' });
+      // Super Scooper 21": the 21" version (speakerplans.com), same construction from its own drawing: 798 deep x 1320 high
+      // x 636 wide (600 inside). Flares 2 deg and 12 deg, 574 mm-radius scoop, 700 mm mouth. Horn length 2.44 m, cutoff 35 Hz.
+      buildScooper(d, { D: 798, H: 1320, W: 600, rec: 36, baffleBot: 700, vx: 287, vy: 567, cx: 496, cy: 653, wall: 294, wallBot: 747, hookTop: 853, tip: [188, 797],
+        clY: 1192, clX: 421, crX: 667, crY: 1189, wlx: 483, wly: 1120, wlLean: 2.5, wrx: 591, wry: 1116, acx: 209, acy: 586, rIn: 574, drvY: 1010 },
+        ['WinISD:Precision Devices PD.2150'].find((k) => LIBMAP.has(k)) || key);
     }
     if (kind === 'gsub') {
       // G Sub: Rog Mogale (speakerplans.com, 2001). Dual 18" vented box, 536 x 1100 x 670 (500 inside), baffle recessed 34 mm,
@@ -3100,6 +3143,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       ['auto', `Auto · ${autoTxt} runs through`],
       ['through:' + j.a.id, `${na} runs through, ${nb} butts`],
       ['through:' + j.b.id, `${nb} runs through, ${na} butts`],
+      ['butt:' + j.a.id, `${nb} butts onto ${na} (${na} keeps a square end)`],
+      ['butt:' + j.b.id, `${na} butts onto ${nb} (${nb} keeps a square end)`],
       ['miter', 'Miter (both cut on the bisector)'],
       ['square', 'Square ends (boards overlap)'],
     ];
