@@ -29,8 +29,10 @@ let peCount = 0;
 if (fs.existsSync(pe)) {
   try {
     const peRows = JSON.parse(fs.readFileSync(pe, 'utf8'));
-    const lav = path.join(root, 'data', 'pe_lavoce.json');   // Lavoce 8-21" (Parts Express + spec sheets)
-    if (fs.existsSync(lav)) peRows.push(...JSON.parse(fs.readFileSync(lav, 'utf8')));
+    for (const extra of ['pe_lavoce.json', 'pe_celestion.json', 'pe_beyma.json']) {   // more brands (Parts Express + spec sheets)
+      const f = path.join(root, 'data', extra);
+      if (fs.existsSync(f)) { try { peRows.push(...JSON.parse(fs.readFileSync(f, 'utf8'))); } catch (e) { console.warn(extra + ' not readable:', e.message); } }
+    }
     const peCountN = {}; peRows.forEach((d) => { const n = d.brand + ' ' + d.model + '|' + d.source; peCountN[n] = (peCountN[n] || 0) + 1; });
     for (const d0 of peRows) {
       const d = (peCountN[d0.brand + ' ' + d0.model + '|' + d0.source] > 1 && d0.nominal_ohms && !new RegExp('-' + d0.nominal_ohms + '$').test(d0.model)) ? { ...d0, model: `${d0.model} ${d0.nominal_ohms}Ω` } : d0;
@@ -39,7 +41,8 @@ if (fs.existsSync(pe)) {
       const Qes = d.Qes || (d.Qts && d.Qms ? 1 / (1 / d.Qts - 1 / d.Qms) : undefined);
       lib.push({ k: `PE:${d.brand} ${d.model}${d.source === 'spec_sheet' ? ' [sheet]' : ''}`, b: d.brand, m: d.model + (d.source === 'spec_sheet' ? ' (spec sheet)' : ''), src: tag,
         Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, url: d.url, dims: d.dims || undefined,
-        size: d.size_in || undefined, prof: peProf(d.sku) });
+        size: d.size_in || undefined, prof: peProf(d.sku),
+        mag: /neodymium|\bneo\b/i.test(d.pe_title || '') ? 'neo' : /ferrite/i.test(d.pe_title || '') ? 'ferrite' : undefined });
       peCount++;
     }
   } catch (e) { console.warn('pe_drivers.json not readable yet:', e.message); }

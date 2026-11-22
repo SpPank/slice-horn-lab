@@ -286,13 +286,15 @@ def jobs():
         cands = sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*draw*.pdf')) + glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*draw*.PDF')))
         if cands:
             out.append((os.path.relpath(cands[0], DATA), dims['outer_dia'], dims.get('depth_total'), dims))
-    lv = os.path.join(DATA, 'pe_lavoce.json')   # Lavoce: no separate drawing, the dimension drawing is on the spec sheet
-    if os.path.exists(lv):
+    for extra in ('pe_lavoce.json', 'pe_celestion.json', 'pe_beyma.json'):   # more brands: their own drawing, else the drawing on the spec sheet
+        lv = os.path.join(DATA, extra)
+        if not os.path.exists(lv):
+            continue
         for d in json.load(open(lv, encoding='utf8')):
             dims = d.get('dims') or {}
-            if d.get('source') != 'product_page' or not dims.get('outer_dia'):
+            if d.get('source') != 'product_page' or not dims.get('outer_dia') or not d.get('sku'):
                 continue
-            c = sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*spec-sheet.pdf')))
+            c = sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*draw*.pdf'))) or sorted(glob.glob(os.path.join(DATA, 'sheets', d['sku'] + '-*spec-sheet.pdf')))
             if c:
                 out.append((os.path.relpath(c[0], DATA), dims['outer_dia'], dims.get('depth_total'), dims))
     mf = os.path.join(DATA, 'mfr_drivers.json')

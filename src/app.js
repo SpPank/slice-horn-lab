@@ -87,7 +87,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
     else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
@@ -286,6 +286,22 @@
       d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 40 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
         peq: [{ on: true, type: 'pk', f: 44, g: 6, q: 3 }, { on: true, type: 'pk', f: 113, g: -4, q: 3 }, { on: true, type: 'pk', f: 327, g: -15, q: 6 },
           { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }] };
+    }
+    if (kind === 'x1') {
+      // X1: Rog Mogale (speakerplans.com, 2004), 6th-order bandpass for one 18". 800 deep x 770 high x 606 wide (570 inside).
+      // The driver is fitted from the back access panel under a slanted baffle and fires up into the upper chamber, which
+      // vents through the 120 mm slot along the top (open at the front; the shelf is taken to stop 120 mm short of the back
+      // so the slot reaches the chamber); the lower chamber vents through the 120 mm bottom slot, 417 long. Mogale: 31-119 Hz
+      // with a P.Audio SD-18; our closest 18" is the B&C 18SW115.
+      d.W = 570; d.panels = []; d.seq = 0;
+      P(d, 0, 761, 800, 761); P(d, 0, 9, 800, 9); P(d, 791, 752, 791, 18);     // top, bottom, back (closed)
+      P(d, 0, 623, 662, 623);                                                   // shelf under the top slot
+      P(d, 9, 614, 9, 156);                                                     // front panel between the two slots
+      P(d, 0, 147, 417, 147);                                                   // bottom slot roof (417 long)
+      P(d, 270, 614, 782, 405);                                                 // slanted driver baffle (540)
+      const kx = ['PE:B&C 18SW115', 'PE:B&C 18SW115-4 [sheet]'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = kx;
+      d.drivers.push({ id: ++d.seq, x: 526, y: 509.5, nx: 0.378, ny: 0.926, key: kx, n: 1, wiring: 'parallel', mountStyle: 'rear' });
     }
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];
@@ -749,7 +765,7 @@
       if (!AA.net || !AA.net.drivers.length) return { c: 1e9 };
       pen += 4 * AA.warnings.length;
       if (d.autoPaths && base.paths.length && !AA.paths.length) pen += 60;
-      for (const q of d.drivers) if (driverHits(q, d.panels)) pen += 15;
+      for (const q of d.drivers) if (driverHits(q, d.panels, d.drivers)) pen += 15;
       const Pp = HC.prepare(AA.net);
       const spl = fr.map((f) => 20 * Math.log10(HC.abs(HC.solveAt(Pp, f).pff) / 2e-5 + 1e-20));
       const err = targetError(fr, spl);
@@ -1283,7 +1299,7 @@
   function setMount(d, style) {
     commit(); const prev = d.mountStyle; d.mountStyle = style === 'rear' ? 'rear' : undefined;
     const hb = driverHits(d);
-    if (hb) { d.mountStyle = prev; undo.pop(); flash(`That way it would cut into ${partNames().get(hb.id) || 'a board'}, so it was left as it was.`); refreshSide(); draw(); return; }
+    if (hb) { d.mountStyle = prev; undo.pop(); flash(`That way it would cut into ${hitName(hb)}, so it was left as it was.`); refreshSide(); draw(); return; }
     changed();
   }
   function openDriverMenu(d, sx, sy) {
@@ -1299,7 +1315,7 @@
       closeCtx();
       if (b.dataset.v === 'flip') {
         commit(); d.nx = -d.nx; d.ny = -d.ny; if (d.mount) d.mount.side = -d.mount.side;
-        const hb = driverHits(d); if (hb) { undo.pop(); d.nx = -d.nx; d.ny = -d.ny; if (d.mount) d.mount.side = -d.mount.side; flash(`Flipped, it would cut into ${partNames().get(hb.id) || 'a board'}, so it was left as it was.`); draw(); return; }
+        const hb = driverHits(d); if (hb) { undo.pop(); d.nx = -d.nx; d.ny = -d.ny; if (d.mount) d.mount.side = -d.mount.side; flash(`Flipped, it would cut into ${hitName(hb)}, so it was left as it was.`); draw(); return; }
         changed(); return;
       }
       setMount(d, b.dataset.v);
@@ -1769,6 +1785,25 @@
   /** Driver body in local coordinates. Front mount: flange on the baffle face the cone fires from, basket through
    *  the cutout. Rear mount: driver fitted from the inside, flange against the opposite face, firing out through
    *  the cutout (the whole driver sits one board thickness further back). */
+  /** 'neo' or 'ferrite': the listing says so when it can (build.js), otherwise the makers' model naming decides. */
+  function magType(s) {
+    if (!s) return 'ferrite';
+    if (s.mag) return s.mag;
+    const b = String(s.b || '').toLowerCase(), m = String(s.m || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+    if (/neodym|\bneo\b/i.test(m)) return 'neo';
+    if (/beyma/.test(b)) return /nd\b/i.test(m) ? 'neo' : 'ferrite';
+    if (/lavoce/.test(b)) return /^[a-z]{2}n/i.test(m) ? 'neo' : 'ferrite';
+    if (/eminence/.test(b)) return /lite|neo/i.test(m) ? 'neo' : 'ferrite';
+    if (/b&c/.test(b)) return /^\d+\s*(n|ds|bg|ipal)/i.test(m) ? 'neo' : 'ferrite';
+    if (/faital/.test(b)) return /^\d+\s*(xl|rs|rw|nrb|hx)/i.test(m) ? 'neo' : 'ferrite';
+    return 'ferrite';
+  }
+  /** a neodymium driver's side profile from its sizes: basket tapering in to a compact motor (z from the flange face, radius) */
+  function neoProfile(dm) {
+    const R = dm.outer / 2, rc = Math.max(dm.cutout / 2, R * 0.8), D = dm.depth, fl = Math.max(6, dm.flange);
+    const rm = Math.max(0.2 * R, Math.min(dm.mag / 2, 0.3 * R));
+    return [[0, R], [fl, R], [fl, rc], [D * 0.5, rm * 1.55], [D * 0.6, rm * 1.15], [D * 0.66, rm], [D * 0.95, rm], [D, rm * 0.82]];
+  }
   function driverLocal(d) {
     const dm = driverDims(d.key), t = design.t, rear = d.mountStyle === 'rear';
     const fl = Math.max(4, dm.flange * 0.6);
@@ -1778,10 +1813,12 @@
     const R = dm.outer / 2, rc = dm.cone / 2, rm = dm.mag / 2;
     const basketTop = rear ? mp - fl : -t / 2;            // where the basket leaves the board
     // traced side profile from the technical drawing: [[z from flange face, radius], ...]
-    const spec = specOf(d.key) || {};
+    const spec = specOf(d.key) || {}, mt = magType(spec);
     let outline = null, pf = null;
-    if (spec.prof && spec.prof.length > 3) {
-      const pr = spec.prof, Rp = Math.max(...pr.map((q) => q[1]));
+    // neo: the traced outline from its drawing, else one built from its sizes; ferrite: the block-magnet drawing (below)
+    const prof = mt === 'neo' ? (spec.prof && spec.prof.length > 3 ? spec.prof : neoProfile(dm)) : null;
+    if (prof) {
+      const pr = prof, Rp = Math.max(...pr.map((q) => q[1]));
       const flz = (pr.find((q) => q[1] < 0.95 * Rp) || [0])[0];
       const v = (z) => rear ? -t / 2 - z : t / 2 + flz - z;   // flange's back face on the board (front mount) / its front face (rear mount)
       const right = pr.map(([z, r]) => [r, v(z)]), left = pr.slice().reverse().map(([z, r]) => [-r, v(z)]);
@@ -1834,8 +1871,9 @@
     const loc = driverLocal(d);
     return loc.outline ? [driverWorld(d, loc.outline)] : [loc.flange, loc.basket, loc.magnet].map((a) => driverWorld(d, a));
   }
-  /** The board (other than its own baffle) that a driver's body cuts into, or null. */
-  function driverHits(d, panels) {
+  /** The board (other than its own baffle) or the other driver that a driver's body cuts into, or null.
+   *  A driver hit is returned as { driver, label } so messages can name it. */
+  function driverHits(d, panels, drivers) {
     panels = panels || design.panels;
     const shapes = driverShapesWorld(d);
     const own = d.mount ? d.mount.pid : (nearestPanel(d.x, d.y) || {}).p?.id;
@@ -1844,8 +1882,14 @@
       const q = HG.panelQuad(p, design.t);
       if (shapes.some((sh) => polyOverlap(sh, q))) return p;
     }
+    for (const o of drivers || design.drivers) {
+      if (o === d || o.id === d.id) continue;
+      const os = driverShapesWorld(o);
+      if (shapes.some((sh) => os.some((q) => polyOverlap(sh, q)))) return { driver: o, label: 'the ' + ((specOf(o.key) || {}).m || 'other driver') };
+    }
     return null;
   }
+  const hitName = (hb) => (hb && hb.label) || partNames().get(hb && hb.id) || 'a board';
   function drawDriver(d) {
     const dm = driverDims(d.key), t = design.t;
     const L = hyp(d.nx, d.ny) || 1, nx = d.nx / L, ny = d.ny / L, ux = ny, uy = -nx; // u along panel, n = front
@@ -1931,7 +1975,7 @@
     }
     if (tool === 'panel') chips.push(`<span class="chip">Drawing: ${align === 'center' ? 'centre-line' : align + ' face'} (X)</span>`);
     for (const w of (A && A.warnings) || []) chips.push(`<span class="chip warn">${esc(w)}</span>`);
-    if (!drag) for (const d of design.drivers) { const hb = driverHits(d); if (hb) chips.push(`<span class="chip warn">${esc((specOf(d.key) || {}).m || 'Driver')} cuts into ${esc(partNames().get(hb.id) || 'a board')} — move it, rear-mount it, or flip the basket.</span>`); }
+    if (!drag) for (const d of design.drivers) { const hb = driverHits(d); if (hb) chips.push(`<span class="chip warn">${esc((specOf(d.key) || {}).m || 'Driver')} cuts into ${esc(hitName(hb))} — move it, rear-mount it, or flip the basket.</span>`); }
     el.innerHTML = chips.join('');
   }
   // ---- part roles & names (auto-deduced in HornGeom.inferParts; a human choice in panel.role / panel.name wins)
@@ -2542,7 +2586,7 @@
 
   // ---------------------------------------------------------------- driver picker
   function setPickerText() { const s = specOf(design.driverKey); $('drvSearch').value = s ? label(s) : ''; }
-  const BRANDS = { bc: /^B&C/i, eminence: /^Eminence/i, faital: /^Faital/i, lavoce: /^Lavoce/i };
+  const BRANDS = { bc: /^B&C/i, eminence: /^Eminence/i, faital: /^Faital/i, lavoce: /^Lavoce/i, celestion: /^Celestion/i, beyma: /^Beyma/i };
   const nominal = (d) => {
     if (d.size) return +d.size;
     const dc = 2 * Math.sqrt((d.Sd || 0) / Math.PI) / 2.54;   // effective cone dia, inches

@@ -30,6 +30,7 @@ To start something new, pick from **Start from — preset —**:
 | **Super Scooper 21" (Rog Mogale)** | The 21" version (PD 2150): 798 × 1320 × 636 mm, 2.44 m horn, Mogale's cutoff 35 Hz; simulates −3 dB at 35 Hz. |
 | **186 Horn (Rog Mogale)** | The same folded-horn cabinet as the 1850, with the PD 186 it was drawn for (the PD 1850 is his "extreme SPL" option). |
 | **HD 15 Horn (Rog Mogale)** | Compact 15" horn for stacks of 6+ (Eminence Kappa Pro-15LF2), 618 × 578 mm side, front fully open as the mouth; the curved former is one flat 45° board. |
+| **X1 (Rog Mogale)** | 6th-order bandpass for one 18", 800 × 770 × 606 mm, read as: driver under a slanted baffle firing into an upper chamber that vents along a full-width top slot, lower chamber vented by the bottom slot. Drawn for a P.Audio SD-18 (not in the library; B&C 18SW115 used). It simulates −3 dB at 47 Hz against Mogale's 31 Hz, so the slot reading may be off. |
 | **S12BP (B&C Speakers)** | B&C's 6th-order bandpass for one 12", drawn from their top view (450 × 650, 400 high, 15 mm ply), with B&C's DSP settings loaded. B&C specify the 12BG76; our library's closest is the 12BG100. |
 | **G Sub 2×18" (Rog Mogale)** | Dual-18" vented box (2 × PD 186), 536 × 1100 × 670 mm with a 464 × 120 slot port; −3 dB at 35 Hz (his 36.9 Hz). |
 | *Starting templates* | Tapped horn (3 legs), front-loaded horn, vented box, sealed box, blank. |
@@ -121,7 +122,7 @@ On the SPL tab, the **Target** bar lets you draw the response you want:
 
 ## Drivers
 
-The built-in library has about 1,285 drivers: B&C, Eminence, Faital Pro and Lavoce 8–21" pro woofers (from Parts Express listings and manufacturer data sheets), plus your WinISD library if you build it yourself. About 175 have real outlines traced from their technical drawings, so the basket you see is the actual shape; the rest are drawn from their stated frame, cutout and depth.
+The built-in library has about 1,380 drivers: B&C, Beyma, Celestion, Eminence, Faital Pro and Lavoce 8–24" pro woofers (from Parts Express listings and manufacturer data sheets), plus your WinISD library if you build it yourself. About 175 have real outlines traced from their technical drawings, so the basket you see is the actual shape; the rest are drawn from their stated frame, cutout and depth. Ferrite drivers are drawn with a block magnet and neodymium drivers with a slim basket and compact motor, so you can tell them apart at a glance. Drivers can't overlap a board or each other: a drag that would collide turns red and snaps back.
 
 **Import driver…** (next to Brand) adds your own from:
 - a **Hornresp** driver or record file (including the advanced semi-inductance and frequency-dependent damping parameters),
@@ -202,4 +203,4 @@ The default project is `data/default_design.json`. Replace its `design` with any
 - **SKRAM** and **Skhorn** are designed by Josh Ricci (ZOD Audio); the SKRAM plans were shared by [TinkerandParty](https://tinkerandparty.com/) and the Skhorn plans are hosted by [JW Sound](https://www.jwsound.live/designs/riccis-skhorn-subwoofer), both with his permission. Please credit Josh if you use it commercially. **18" tapped horn** design by Speaker Box Maker; **1850 folded horn** by Rog Mogale. **Super Scooper** by Rog Mogale ([speakerplans.com](https://www.speakerplans.com/index.php?id=18superscooper)). **BC118** by All_1 on diyAudio ([thread](https://www.diyaudio.com/community/threads/boundary-control-bc-subwoofer-bc218-2-design.413237/)), after Tom Danley's BC218.
 - Acoustic model after David McBean's **Hornresp**; this is an independent re-implementation, not affiliated with it.
 - Advanced driver model after Thorborg & Futtrup, *JAES* 2011.
-- Driver data from Parts Express product listings and B&C, Eminence, Faital Pro and Lavoce data sheets. Check critical numbers against the current manufacturer data sheet.
+- Driver data from Parts Express product listings and B&C, Beyma, Celestion, Eminence, Faital Pro and Lavoce data sheets. Check critical numbers against the current manufacturer data sheet.
