@@ -195,7 +195,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       <select id="drvSize" aria-label="Size"><option value="">Any size</option><option value="all8">8–21"</option><option value="8">8"</option><option value="10">10"</option><option value="12">12"</option><option value="15">15"</option><option value="18">18"</option><option value="21">21"</option></select>
       <input type="text" id="drvSearch" placeholder="Search model…" autocomplete="off"><div class="list" id="drvList" hidden></div></div>
     <label class="field"><span>Start from</span><select id="preset">
-      <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="x1">X1 18" (Rog Mogale)</option><option value="s12bp">S12BP (B&amp;C Speakers)</option><option value="s21hl">S21HL (B&amp;C Speakers)</option><option value="s218bp">S218BP (B&amp;C Speakers)</option><option value="s21ib">S21IB (B&amp;C Speakers)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
+      <option value="">— preset —</option><option value="default">Default project</option><option value="th18sbm">18" tapped horn (Speaker Box Maker)</option><option value="h1850">1850 folded horn (Rog Mogale)</option><option value="skram">SKRAM 21" (Josh Ricci)</option><option value="skhorn">Skhorn 2×21" (Josh Ricci)</option><option value="bc118">BC118 (All_1)</option><option value="scooper">Super Scooper 18" (Rog Mogale)</option><option value="scooper21">Super Scooper 21" (Rog Mogale)</option><option value="h186">186 Horn (Rog Mogale)</option><option value="hd15">HD 15 Horn (Rog Mogale)</option><option value="gsub">G Sub 2×18" (Rog Mogale)</option><option value="x1">X1 18" (Rog Mogale)</option><option value="s12bp">S12BP (B&amp;C Speakers)</option><option value="s21hl">S21HL (B&amp;C Speakers)</option><option value="s218bp">S218BP (B&amp;C Speakers)</option><optgroup label="Starting templates"><option value="th">Tapped horn (3 legs)</option><option value="flh">Front-loaded horn</option><option value="vented">Vented box (slot port)</option><option value="sealed">Sealed box</option><option value="blank">Blank board</option></optgroup>
     </select></label>
     <div class="field seg" role="group" aria-label="Grid and units"><span>Grid</span><div id="snapSeg"></div></div>
     <div class="field seg" role="group" aria-label="Side view"><span>View</span><div id="viewSeg" class="segbox"></div></div>
@@ -239,7 +239,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
             <li><b>Pin curve</b> to compare before and after.</li>
             <li><b>Quantize the build</b> (Design panel) rounds everything to whole mm and 5° angles before you cut.</li>
             <li>Export: cut list, DXF side profile, CSV response, and the equivalent Hornresp inputs to cross-check.</li>
-            <li>Presets: 18" tapped horn (Speaker Box Maker), 1850 folded horn (Rog Mogale), SKRAM 21" and Skhorn 2×21" (Josh Ricci), BC118 (All_1), Super Scooper 18" and 21", 186 Horn, HD 15 Horn, G Sub and X1 (Rog Mogale), S12BP, S21HL, S218BP and S21IB (B&amp;C Speakers), plus tapped horn / FLH / vented / sealed templates.</li>
+            <li>Presets: 18" tapped horn (Speaker Box Maker), 1850 folded horn (Rog Mogale), SKRAM 21" and Skhorn 2×21" (Josh Ricci), BC118 (All_1), Super Scooper 18" and 21", 186 Horn, HD 15 Horn, G Sub and X1 (Rog Mogale), S12BP, S21HL and S218BP (B&amp;C Speakers), plus tapped horn / FLH / vented / sealed templates.</li>
           </ul>
           <h4>Limits</h4>
           <p>It's a 1-D plane-wave model like Hornresp (checked against Hornresp exports: 0.00 dB on a front-loaded horn, ~0.05 dB on a vented box). It doesn't model panel flex, port compression or driver non-linearity, so treat the red over-excursion areas as "not actually reachable". The preset designs are traced approximations for simulation; build from the designers' own plans.</p>
@@ -1658,7 +1658,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', s21hl: 'S21HL (B&C Speakers)', s218bp: 'S218BP (B&C Speakers)', s21ib: 'S21IB (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', s21hl: 'S21HL (B&C Speakers)', s218bp: 'S218BP (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
     else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
@@ -1950,39 +1950,6 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       d.drivers.push({ id: ++d.seq, x: 550, y: 1037.5, nx: 0, ny: 1, key: k18, n: 1, wiring: 'parallel', mountStyle: 'rear' });
       d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 29 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
         peq: [{ on: true, type: 'pk', f: 33, g: 3, q: 3 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
-    }
-    if (kind === 's21ib') {
-      // S21IB: B&C Speakers suggested design "Extended LF Reflex Isobaric Subwoofer", 1 x 21DS115 + 2 x 18DS115 (8 ohm),
-      // from B&C's PDF and panel DXFs. 900 wide x 600 high x 750 deep outside, 15 mm birch ply, 570 mm inside height.
-      // Drawn as the TOP view (plan) at mid-height: x = depth from the front face (front on the left), y = across the
-      // width; the extrusion is the 570 mm inside height. The 21 fires out of the front baffle. Behind it a 90 deg V of two
-      // boards (apex 398 mm back) closes the sealed isobaric coupling chamber (~79 L); an 18DS115 sits on each leg, cone
-      // facing into the coupling chamber (the 21's rear), basket and magnet in the reflex chamber (~254 L), which wraps
-      // round behind and outside the V. Ports: two triangular tunnels (227.7 mm legs, 259 cm2 each) in the bottom front
-      // corners, 335 mm long from the front face, opening into the reflex chamber beside the side walls. A plan section
-      // can't show them, so each is a slot along a side wall. The true equivalent (45.5 mm x 335 mm) would put the 18s'
-      // magnets in the slot (in the real cab they sit above the tunnels), so the slots are 37 mm x 255 mm instead: same
-      // tuning in the sim (fb 36.7 vs 36.8 Hz; B&C's impedance minimum is at ~35 Hz). Left out: handles, grille, feet, the
-      // corner the V legs lose at the bottom where they sit on the port boards, and the two 70 mm wiring holes near the top
-      // of the V legs (taken as sealed after wiring; open, they would short the 18s' two sides together at LF and the
-      // impedance would no longer match B&C's). B&C: -3 dB @ 28 Hz, CEA-2010B 136 dB peak @ 1 m half-space. All three
-      // drivers identically powered/processed (one or two amp channels); B&C's impedance curve is all three in parallel
-      // (2.7 ohm min), the same as here.
-      d.W = 570; d.t = 15; d.panels = []; d.seq = 0;
-      P(d, 0, 7.5, 750, 7.5); P(d, 0, 892.5, 750, 892.5);      // side walls (full 750 depth)
-      P(d, 742.5, 15, 742.5, 885);                              // back
-      P(d, 0, 59.5, 255, 59.5); P(d, 0, 840.5, 255, 840.5);     // port boards: 37 mm slots along the side walls, open at the front
-      P(d, 7.5, 67, 7.5, 833);                                  // front baffle (21DS115), between the port boards
-      P(d, 14.9, 67, 403.2, 455.3);                             // V leg 1, 45 deg, from the port board to the apex tip
-      P(d, 14.9, 833, 392.6, 455.3);                            // V leg 2, butts into leg 1's face at the apex
-      const k21 = ['PE:B&C 21DS115 8Ω', 'PE:B&C 21DS115 [sheet]'].find((k) => LIBMAP.has(k)) || key;
-      const k18 = ['PE:B&C 18DS115 8Ω', 'PE:B&C 18DS115 [sheet]'].find((k) => LIBMAP.has(k)) || key;
-      d.driverKey = k21;
-      d.drivers.push({ id: ++d.seq, x: 7.5, y: 450, nx: -1, ny: 0, key: k21, n: 1, wiring: 'parallel' });                  // 21DS115, fires out of the front
-      d.drivers.push({ id: ++d.seq, x: 206.4, y: 258.5, nx: -0.7071, ny: 0.7071, key: k18, n: 1, wiring: 'parallel' });   // 18DS115 on leg 1, cone into the coupling chamber
-      d.drivers.push({ id: ++d.seq, x: 206.4, y: 641.5, nx: -0.7071, ny: -0.7071, key: k18, n: 1, wiring: 'parallel' });  // 18DS115 on leg 2
-      d.dsp = { hp: { on: true, type: 'BW', order: 2, f: 30 }, lp: { on: true, type: 'LR', order: 4, f: 80 }, gain: 0,
-        peq: [{ on: true, type: 'pk', f: 34, g: 3, q: 4 }, { on: false, type: 'pk', f: 40, g: 0, q: 2 }, { on: false, type: 'pk', f: 50, g: 0, q: 2 }, { on: false, type: 'pk', f: 63, g: 0, q: 2 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
     }
     if (['th', 'flh', 'vented', 'sealed', 'blank'].includes(kind)) d.W = widthRange(d).def;   // starting templates: driver + 3"
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together

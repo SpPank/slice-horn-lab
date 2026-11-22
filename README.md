@@ -32,7 +32,6 @@ To start something new, pick from **Start from — preset —**:
 | **HD 15 Horn (Rog Mogale)** | Compact 15" horn for stacks of 6+ (Eminence Kappa Pro-15LF2), 618 × 578 mm side, front fully open as the mouth; the curved former is one flat 45° board. |
 | **S21HL (B&C Speakers)** | B&C's horn-loaded 21" (21DS115 4 Ω), from their 1:5 plan DXF: 1000 × 1000 × 800 mm, a 205 L rear chamber with the horn wrapped round it to a 946 × 764 mm mouth, B&C's DSP loaded; simulates −3 dB at 36 Hz. |
 | **S218BP (B&C Speakers)** | B&C's 2 × 18DS115 6th-order bandpass, from the routed grooves in their base-panel DXF (top view, 1200 × 800, 520 high, 15 mm): each driver fires into a narrow front chamber vented by a side port at the front corner, both magnets share a 276 L rear chamber vented by the centre hourglass port. Paths drawn by hand. B&C's DSP loaded; simulates −3 dB at 33 Hz (B&C ≈31 Hz). B&C's small "mandatory" slots in the mid-port walls aren't modelled. |
-| **S21IB (B&C Speakers)** | B&C's isobaric reflex sub (1 × 21DS115 front, 2 × 18DS115 behind it in a V), top view 900 × 750, 600 high, 15 mm: the 18s fire into a sealed 79 L coupling chamber onto the back of the 21; the 255 L reflex chamber's corner tunnels are drawn as side slots tuned to the same 36.7 Hz. B&C's DSP loaded; simulates −3 dB at 30 Hz (B&C 28 Hz), impedance peaks/dip at 24/52/35 Hz like B&C's measurement. |
 | **X1 (Rog Mogale)** | 6th-order bandpass for one 18", 800 × 770 × 606 mm, read as: driver under a slanted baffle firing into an upper chamber that vents along a full-width top slot, lower chamber vented by the bottom slot. Drawn for a P.Audio SD-18 (not in the library; B&C 18SW115 used). It simulates −3 dB at 47 Hz against Mogale's 31 Hz, so the slot reading may be off. |
 | **S12BP (B&C Speakers)** | B&C's 6th-order bandpass for one 12", drawn from their top view (450 × 650, 400 high, 15 mm ply), with B&C's DSP settings loaded. B&C specify the 12BG76; our library's closest is the 12BG100. |
 | **G Sub 2×18" (Rog Mogale)** | Dual-18" vented box (2 × PD 186), 536 × 1100 × 670 mm with a 464 × 120 slot port; −3 dB at 35 Hz (his 36.9 Hz). |
@@ -203,7 +202,7 @@ The default project is `data/default_design.json`. Replace its `design` with any
 
 ## Credits and data
 
-- **S12BP, S21HL, S218BP and S21IB** are B&C Speakers suggested designs (bcspeakers.com).
+- **S12BP, S21HL and S218BP** are B&C Speakers suggested designs (bcspeakers.com).
 - **SKRAM** and **Skhorn** are designed by Josh Ricci (ZOD Audio); the SKRAM plans were shared by [TinkerandParty](https://tinkerandparty.com/) and the Skhorn plans are hosted by [JW Sound](https://www.jwsound.live/designs/riccis-skhorn-subwoofer), both with his permission. Please credit Josh if you use it commercially. **18" tapped horn** design by Speaker Box Maker; **1850 folded horn** by Rog Mogale. **Super Scooper** by Rog Mogale ([speakerplans.com](https://www.speakerplans.com/index.php?id=18superscooper)). **BC118** by All_1 on diyAudio ([thread](https://www.diyaudio.com/community/threads/boundary-control-bc-subwoofer-bc218-2-design.413237/)), after Tom Danley's BC218.
 - Acoustic model after David McBean's **Hornresp**; this is an independent re-implementation, not affiliated with it.
 - Advanced driver model after Thorborg & Futtrup, *JAES* 2011.
