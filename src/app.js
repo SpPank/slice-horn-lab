@@ -87,7 +87,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', bc118: 'BC118 (All_1)', scooper: 'Super Scooper 18in (Rog Mogale)', scooper21: 'Super Scooper 21in (Rog Mogale)', gsub: 'G Sub 2x18in (Rog Mogale)', h186: '186 Horn (Rog Mogale)', hd15: 'HD 15 Horn (Rog Mogale)', s12bp: 'S12BP (B&C Speakers)', s21hl: 'S21HL (B&C Speakers)', x1: 'X1 (Rog Mogale)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     if (design && design.custom && design.custom[key]) d.custom[key] = JSON.parse(JSON.stringify(design.custom[key]));   // a design-local driver travels with it
     else if (!specOf(key) && key !== DEFAULT_DRIVER) d.driverKey = DEFAULT_DRIVER;
@@ -302,6 +302,32 @@
       const kx = ['PE:B&C 18SW115', 'PE:B&C 18SW115-4 [sheet]'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = kx;
       d.drivers.push({ id: ++d.seq, x: 526, y: 509.5, nx: 0.378, ny: 0.926, key: kx, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+    }
+    if (kind === 's21hl') {
+      // S21HL: B&C Speakers suggested design, front-loaded folded horn for one 21". Drawn from B&C's dimensioned TOP view
+      // (DXF sheet 01; the layout is in the horizontal plane, so the cabinet height is the extrusion): 1000 x 1000 x 800 high,
+      // 18 mm birch ply, 764 inside. The 21DS115 is front-mounted on the slanted baffle P (fitted through the 600 x 600
+      // window in the double access side D+E) and fires into the tapering wedge throat between P and that side. The horn
+      // runs out of the wedge, round the 149 corner board L, up beside the back B, round the 230 corner board M, along the
+      // side C over the pentagonal rear chamber (P, F, G, H, I, ~200 L) and out of the whole open face (946 x 764 mouth).
+      // Mirrored so the mouth is on the left. The two O shelves in the horn (they cut its height by 36 mm) and the N chamber
+      // braces are omitted; P is 21 mm in B&C's model, drawn 18 here with its throat face where B&C put it.
+      d.W = 764; d.panels = []; d.seq = 0;
+      P(d, 991, 0, 991, 1000);                                     // B back (1000, full depth)
+      P(d, 982, 991, 0, 991);                                      // C horn side panel (982), butts into B
+      P(d, 982, 18, 0, 18); d.panels[d.panels.length - 1].t = 36;  // D external + E internal access panels (36), butt into B
+      P(d, 982, 128.6, 889.4, 36);                                 // L corner board (149 face) at back / access side
+      P(d, 982, 832.1, 832.1, 982);                                // M corner board (230 face) at back / C
+      P(d, 794.4, 209.1, 707.5, 701.5);                            // F chamber wall (500), foot flush with P's throat face
+      P(d, 700.4, 690.3, 413.7, 613.5);                            // G chamber wall (300), butts into F
+      P(d, 413.7, 613.5, 169.3, 369.1);                            // H chamber wall (350), mitred to G and I
+      P(d, 169.3, 369.1, 48.1, 36);                                // I chamber wall (369), down to the access side at the mouth
+      P(d, 784.1, 215.7, 113.5, 36);                               // P driver baffle (740/660, 15 deg to the access side)
+      const k21 = ['PE:B&C 21DS115 4Ω', 'PE:B&C 21DS115 [sheet]', 'PE:B&C 21DS115 8Ω'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k21;
+      d.drivers.push({ id: ++d.seq, x: 459, y: 128.6, nx: 0.2588, ny: -0.9659, key: k21, n: 1, wiring: 'parallel' });
+      d.dsp = { hp: { on: true, type: 'BW', order: 4, f: 28 }, lp: { on: true, type: 'BW', order: 4, f: 100 }, gain: 4,
+        peq: [{ on: true, type: 'pk', f: 35, g: 6, q: 1 }, { on: true, type: 'pk', f: 60, g: 3, q: 3 }, { on: true, type: 'pk', f: 105, g: 3, q: 6 }, { on: true, type: 'pk', f: 130, g: -6, q: 3 }, { on: false, type: 'pk', f: 80, g: 0, q: 2 }, { on: false, type: 'pk', f: 100, g: 0, q: 2 }] };
     }
     if (kind !== 'default') faceLeft(d);   // every preset's mouth faces the drawing's left; the View switch turns them all together
     if (kind === 'blank') d.drivers = [];

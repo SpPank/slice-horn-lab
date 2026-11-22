@@ -30,6 +30,7 @@ To start something new, pick from **Start from — preset —**:
 | **Super Scooper 21" (Rog Mogale)** | The 21" version (PD 2150): 798 × 1320 × 636 mm, 2.44 m horn, Mogale's cutoff 35 Hz; simulates −3 dB at 35 Hz. |
 | **186 Horn (Rog Mogale)** | The same folded-horn cabinet as the 1850, with the PD 186 it was drawn for (the PD 1850 is his "extreme SPL" option). |
 | **HD 15 Horn (Rog Mogale)** | Compact 15" horn for stacks of 6+ (Eminence Kappa Pro-15LF2), 618 × 578 mm side, front fully open as the mouth; the curved former is one flat 45° board. |
+| **S21HL (B&C Speakers)** | B&C's horn-loaded 21" (21DS115 4 Ω), from their 1:5 plan DXF: 1000 × 1000 × 800 mm, a 205 L rear chamber with the horn wrapped round it to a 946 × 764 mm mouth, B&C's DSP loaded; simulates −3 dB at 36 Hz. |
 | **X1 (Rog Mogale)** | 6th-order bandpass for one 18", 800 × 770 × 606 mm, read as: driver under a slanted baffle firing into an upper chamber that vents along a full-width top slot, lower chamber vented by the bottom slot. Drawn for a P.Audio SD-18 (not in the library; B&C 18SW115 used). It simulates −3 dB at 47 Hz against Mogale's 31 Hz, so the slot reading may be off. |
 | **S12BP (B&C Speakers)** | B&C's 6th-order bandpass for one 12", drawn from their top view (450 × 650, 400 high, 15 mm ply), with B&C's DSP settings loaded. B&C specify the 12BG76; our library's closest is the 12BG100. |
 | **G Sub 2×18" (Rog Mogale)** | Dual-18" vented box (2 × PD 186), 536 × 1100 × 670 mm with a 464 × 120 slot port; −3 dB at 35 Hz (his 36.9 Hz). |
