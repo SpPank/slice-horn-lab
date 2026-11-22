@@ -548,10 +548,29 @@
 
   // ---------------------------------------------------------------- analysis + simulation
   let A = null, R = null, T = null, gen = 0, pins = [];
+  // The response before the current run of cabinet-width changes, drawn dashed behind the live curve: width moves the
+  // curve by a dB or two, which is easy to miss without something to compare against. Any other edit drops it.
+  let ghost = null;
+  const sigNoW = () => JSON.stringify({ ...design, W: 0, ui: 0, seq: 0, target: 0, fRange: 0, paths: design.autoPaths ? 0 : design.paths });   // everything that shapes the response, except the width
+  function ghostSnap() {
+    if (ghost || !R) return;
+    ghost = { W: design.W, sig: sigNoW(), name: `Before: ${fmtL(design.W)} wide`, f: R.f, spl: R.spl.slice(), ze: R.ze.slice(), x: R.x.slice(), gd: R.gd.slice(), max: R.maxSpl.slice() };
+  }
+  const ghostOn = () => (ghost && R && ghost.W !== design.W ? ghost : null);
+  /** pinned curves plus the width "before" curve, each with its colour */
+  const overlays = () => { const g = ghostOn(), o = pins.map((q, i) => ({ ...q, col: pinCol(i) })); if (g) o.push({ ...g, col: C.muted, dash: [6, 4] }); return o; };
+  /** biggest SPL difference from the "before" curve, 20-200 Hz */
+  function ghostDelta() {
+    const g = ghostOn(); if (!g) return null;
+    let best = null;
+    R.f.forEach((f, i) => { if (f < 20 || f > 200) return; const d = R.spl[i] - g.spl[i]; if (!best || Math.abs(d) > Math.abs(best.d)) best = { f, d }; });
+    return best && { ...best, W: g.W };
+  }
   const libFn = (key) => hrOf(key);
   function analyse() {
     try { A = HG.analyse(design, libFn); } catch (e) { console.error(e); A = { warnings: ['Geometry error: ' + e.message], quads: design.panels.map((p) => HG.panelQuad(p, design.t)), paths: [], regions: [] }; }
     regionImg = null;
+    if (ghost && ghost.sig !== sigNoW()) ghost = null;   // something other than the width changed
     simulate();
   }
   const FREQS = HC.logFreqs(10, 2000, 420);
@@ -570,6 +589,7 @@
   /** re-apply the DSP chain to the stored raw response (no acoustic re-solve) */
   function applyDsp() {
     if (!R || !R.Hraw) return;
+    ghost = null;
     const F = R.f.map((f) => xoverH(f));
     R.H = R.Hraw.map((h, i) => HC.mul(h, F[i]));
     R.spl = R.H.map((h) => 20 * Math.log10(HC.abs(h) / 2e-5 + 1e-20));
@@ -2256,7 +2276,7 @@
       base.yLabel = `dB SPL @ 1 m, ${driveLabel(pwrW)}`; base.series.push({ x: f, y: up(R.spl), color: C.accent, width: 2.2, label: 'This design', over: ov });
       if (ov) base.bands = overBands(f, ov);
       if (dspActive()) base.series.push({ x: f, y: up(R.splRaw), color: C.accent, width: 1, dash: [4, 3], label: 'Unfiltered' });
-      pins.forEach((p, i) => base.series.unshift({ x: p.f, y: up(p.spl), color: pinCol(i), width: 1.4, label: p.name }));
+      overlays().forEach((p) => base.series.unshift({ x: p.f, y: up(p.spl), color: p.col, dash: p.dash, width: 1.4, label: p.name }));
       if (design.target && design.target.pts.length >= 2) {
         const [tl, th] = targetBand(), tf = HC.logFreqs(tl, th, 60);
         const toff = tdrag ? tdrag.off : targetOffset() + dB;
@@ -2272,20 +2292,20 @@
     } else if (tab === 'imp') {
       base.yLabel = 'Ω'; base.series.push({ x: f, y: R.ze, color: C.accent, width: 2, label: '|Ze|' });
       base.series2 = { x: f, y: R.zePh, color: C.muted, label: 'phase (°)', min: -90, max: 90 };
-      pins.forEach((p, i) => base.series.unshift({ x: p.f, y: p.ze, color: pinCol(i), width: 1.2, label: p.name }));
+      overlays().forEach((p) => base.series.unshift({ x: p.f, y: p.ze, color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'exc') {
       const kx = Math.sqrt(pwrW), ov = overRatio(kx);
       base.yLabel = `mm peak @ ${driveLabel(pwrW)}`; base.series.push({ x: f, y: R.x.map((v) => v * kx), color: C.accent, width: 2, label: 'Cone excursion', over: ov });
       if (ov) base.bands = overBands(f, ov);
       if (R.Xmax) base.hlines = [{ y: R.Xmax, color: C.bad, label: `Xmax ${R.Xmax} mm` }];
-      pins.forEach((p, i) => base.series.unshift({ x: p.f, y: p.x.map((v) => v * kx), color: pinCol(i), width: 1.2, label: p.name }));
+      overlays().forEach((p) => base.series.unshift({ x: p.f, y: p.x.map((v) => v * kx), color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'load') {
       base.yLabel = 'normalised to ρc/Sd'; base.series.push({ x: f, y: R.ra, color: C.accent, width: 2, label: 'Resistance Ra' }, { x: f, y: R.xa, color: C.driver, width: 1.5, label: 'Reactance Xa' });
     } else if (tab === 'gd') {
       base.yLabel = 'ms'; base.series.push({ x: f, y: R.gd, color: C.accent, width: 2, label: 'Group delay' });
-      pins.forEach((p, i) => p.gd && base.series.unshift({ x: p.f, y: p.gd, color: pinCol(i), width: 1.2, label: p.name }));
+      overlays().forEach((p) => p.gd && base.series.unshift({ x: p.f, y: p.gd, color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       const vals = R.gd.filter((_, i) => f[i] >= Math.max(f0, 15) && f[i] <= f1); base.ymin = Math.min(0, Math.floor(Math.min(...vals) / 5) * 5); base.ymax = Math.max(10, Math.ceil(Math.max(...vals) / 5) * 5);
     } else if (tab === 'vel') {
       base.yLabel = `m/s peak @ ${driveLabel(pwrW)}`;
@@ -2296,7 +2316,7 @@
       base.series.push({ x: f, y: R.maxSpl, color: C.accent, width: 2.4, label: 'Max SPL' });
       if (R.Pe) base.series.push({ x: f, y: R.maxTh, color: C.warn, width: 1, dash: [4, 3], label: `Thermal (${R.Pe} W)` });
       if (R.Xmax) base.series.push({ x: f, y: R.maxX, color: C.bad, width: 1, dash: [4, 3], label: `Xmax (${R.Xmax} mm)` });
-      pins.forEach((p, i) => p.max && base.series.unshift({ x: p.f, y: p.max, color: pinCol(i), width: 1.2, label: p.name }));
+      overlays().forEach((p) => p.max && base.series.unshift({ x: p.f, y: p.max, color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       const m = Math.max(...R.maxSpl.filter((v, i) => isFinite(v) && f[i] >= f0 && f[i] <= f1)); base.ymax = Math.ceil((m + 4) / 5) * 5; base.ymin = base.ymax - 40;
       if (!R.Pe && !R.Xmax) base.note = 'Set Pe and Xmax for the driver to see limits.';
     } else if (tab === 'area') {
@@ -2548,7 +2568,7 @@
       pc.classList.toggle('idle', !pwrTab); pc.title = pwrTab ? '' : 'Power has no effect on this tab (the model is linear); it applies to SPL, Excursion and Air velocity.';
       if (pwrTab) parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${powerStatus()}</span></div>`);
     }
-    parts.push(`<span style="flex:1"></span><button id="pinBtn" title="Keep this curve as a grey overlay to compare against">Pin curve</button>${pins.length ? '<button id="clrPins">Clear pins</button>' : ''}`);
+    parts.push(`<span style="flex:1"></span><button id="pinBtn" title="Keep this curve as a grey overlay to compare against">Pin curve</button>${pins.length || ghostOn() ? `<button id="clrPins">${pins.length ? 'Clear pins' : 'Clear before'}</button>` : ''}`);
     const dspTabs = ['spl', 'exc', 'gd', 'step', 'decay', 'vel'];
     parts.push(`<select id="fRangeSel" aria-label="Frequency range"><option value="20,500">20–500 Hz</option><option value="20,1000">20–1k Hz</option><option value="20,2000">20–2k Hz</option></select>`);
     const lower = [];   // DSP bar and target live at the top of the scrolling part of the panel
@@ -2586,7 +2606,7 @@
     bindDspBar();
     const fr = $('fRangeSel'); fr.value = fRange().join(','); fr.onchange = () => { design.fRange = fr.value.split(',').map(Number); drawChart(); };
     $('pinBtn').onclick = () => { if (!R) return; pins.push({ name: `${design.name} #${pins.length + 1}`, f: R.f, spl: R.spl.slice(), ze: R.ze.slice(), x: R.x.slice(), gd: R.gd.slice(), max: R.maxSpl.slice() }); if (pins.length > 5) pins.shift(); drawChart(); refreshLegend(); };
-    if ($('clrPins')) $('clrPins').onclick = () => { pins = []; drawChart(); refreshLegend(); };
+    if ($('clrPins')) $('clrPins').onclick = () => { pins = []; ghost = null; drawChart(); refreshLegend(); widthNote(); };
   }
 
   function stats() {
@@ -2671,18 +2691,29 @@
   /** Cabinet width (the dimension into the screen) lives in the pinned top of the side panel, so it is always in reach. */
   function widthBar() {
     const el = $('widthBar'); if (!el) return;
-    const wr = widthRange(), u = snapMode().unit;
-    const out = design.W < wr.min ? `Narrower than the driver + 1" (${toU(wr.min)} ${u}); moving the slider brings it into range.`
-      : design.W > wr.max ? `Wider than 2 × the driver (${toU(wr.max)} ${u}); moving the slider brings it into range.` : '';
-    el.title = 'Inside width of the cabinet: how far the side view extends into the screen. The driver sets the limits: its frame + 1" up to 2 × its frame. A new design starts at frame + 3".';
-    el.innerHTML = sliderRow('dsWs', 'Cabinet width', design.W, wr.min, wr.max, snapMode().step) +
-      `<span class="wrange${out ? ' warn' : ''}" id="wRange">${out || `outside ${toU(design.W + 2 * design.t)} · range ${toU(wr.min)}–${toU(wr.max)} ${u}`}</span>`;
-    bindSlider('dsWs', (v) => {
-      const r = widthRange(); design.W = Math.min(r.max, Math.max(r.min, v));
-      const t = $('wRange'); if (t) { t.className = 'wrange'; t.textContent = `outside ${toU(design.W + 2 * design.t)} · range ${toU(r.min)}–${toU(r.max)} ${snapMode().unit}`; }
-    }, false, el);
+    const wr = widthRange();
+    el.title = 'Inside width of the cabinet: how far the side view extends into the screen. Every air-path area (throat, mouth, ports) and every chamber volume is the side-view size × this width. The driver sets the limits: its frame + 1" up to 2 × its frame. A new design starts at frame + 3".';
+    el.innerHTML = sliderRow('dsWs', 'Cabinet width', design.W, wr.min, wr.max, snapMode().step) + '<div class="wnote" id="wNote"></div>';
+    bindSlider('dsWs', (v) => { ghostSnap(); const r = widthRange(); design.W = Math.min(r.max, Math.max(r.min, v)); }, false, el);
+    widthNote();
   }
-  function refreshSide() { drawChart(); refreshLegend(); stats(); if (!sliding) { widthBar(); inspector(); } }
+  /** the line under the width slider: what the width is doing to the air path, and how far the response has moved */
+  function widthNote() {
+    const el = $('wNote'); if (!el) return;
+    const wr = widthRange(), u = snapMode().unit, bits = [];
+    if (design.W < wr.min) bits.push(`<span class="warn">Narrower than the driver + 1" (${toU(wr.min)} ${u}); moving the slider brings it into range.</span>`);
+    else if (design.W > wr.max) bits.push(`<span class="warn">Wider than 2 × the driver (${toU(wr.max)} ${u}); moving the slider brings it into range.</span>`);
+    const P = A && A.paths && A.paths[0], e = P && P.ends, cm2 = (v) => (v * 1e4).toFixed(0);
+    if (e) bits.push(`${e[0].kind === 'open' ? 'Mouth' : e[0].kind === 'chamber' && e[0].endCorr ? 'Port' : 'Throat'} <b>${cm2(e[0].S)}</b> → ${e[1].kind === 'open' ? 'mouth' : 'end'} <b>${cm2(e[1].S)} cm²</b>`);
+    const ch = ((A && A.regions) || []).filter((r) => r && r.kind === 'chamber' && !r.unused);
+    if (ch.length) bits.push(`chamber${ch.length > 1 ? 's' : ''} <b>${ch.map((r) => r.Vnet.toFixed(1)).join(' + ')} L</b>`);
+    bits.push(`outside ${toU(design.W + 2 * design.t)} ${u}`);
+    const gd = ghostDelta();
+    if (gd) bits.push(`<span class="wdelta">vs ${fmtL(gd.W)}: ${Math.abs(gd.d) < 0.05 ? 'no change' : `up to ${gd.d > 0 ? '+' : '−'}${Math.abs(gd.d).toFixed(1)} dB (at ${gd.f.toFixed(0)} Hz)`}</span>`);
+    else bits.push(`range ${toU(wr.min)}–${toU(wr.max)} ${u}`);
+    el.innerHTML = bits.join(' · ');
+  }
+  function refreshSide() { drawChart(); refreshLegend(); stats(); if (!sliding) { widthBar(); inspector(); } else widthNote(); }
   function inspector() {
     const el = $('insp'); let h = '';
     const one = sel.length === 1 ? sel[0] : null;

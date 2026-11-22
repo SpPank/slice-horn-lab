@@ -70,12 +70,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .side { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); overflow: hidden; }
 .sidetop { flex: none; padding-bottom: 8px; border-bottom: 1px solid var(--line); box-shadow: 0 6px 10px -8px rgba(0,0,0,.45); position: relative; z-index: 1; }
 .sidescroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.wbar { display: flex; align-items: center; gap: 12px; margin: 8px 12px 0; }
+.wbar { margin: 8px 12px 0; }
 .wbar:empty { display: none; }
-.wbar .sl { flex: 1 1 auto; min-width: 0; grid-template-columns: max-content minmax(60px, 1fr) 5.2em 1.6em; }
+.wbar .sl { grid-template-columns: max-content minmax(60px, 1fr) 5.2em 1.6em; }
 .wbar .sl label { color: var(--ink); font-weight: 600; white-space: nowrap; }
-.wbar .wrange { flex: none; font-family: var(--font-data); font-size: 11px; color: var(--muted); white-space: nowrap; }
-.wbar .wrange.warn { flex: 0 1 48%; white-space: normal; font-family: inherit; color: var(--warn); }
+.wbar .wnote { margin-top: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.35em; }
+.wbar .wnote b { color: var(--ink); font-weight: 600; font-family: var(--font-data); }
+.wbar .wnote .warn { color: var(--warn); }
+.wbar .wnote .wdelta { color: var(--accent); font-weight: 600; }
 .legend2 { padding-top: 8px; }
 .legend2[hidden] { display: none; }
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px 0; }
@@ -240,7 +242,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
             <li><span class="kbd">C</span> curved board (bent ply): click its start, click its end, move to bend it and click. Drag the square end handles or the round bend handle to reshape it; select it to set an exact radius.</li>
             <li><span class="kbd">D</span> driver: click a board to mount it. <span class="kbd">F</span> flips it. Right-click it for front/rear mounting.</li>
             <li>Right-click a corner to change how two boards join.</li>
-            <li><b>Cabinet width</b> slider, pinned under the chart: how far the side view extends into the screen (driver + 1" to 2 × the driver).</li>
+            <li><b>Cabinet width</b> slider, pinned under the chart: how far the side view extends into the screen (driver + 1" to 2 × the driver). Every throat, mouth and port area and every chamber volume scales with it; the line under the slider shows them, and a dashed <b>Before</b> curve shows how far the response moved.</li>
             <li><b>Design</b> panel (right side, scroll down): board thickness, floor / wall / corner loading.</li>
             <li>Air paths are found automatically. You don't need to draw them.</li>
             <li><span class="kbd">Ctrl Z</span> undo · wheel zooms · right-drag pans · <span class="kbd">0</span> fit · <span class="kbd">?</span> this help.</li>

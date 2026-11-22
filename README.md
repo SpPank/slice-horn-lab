@@ -45,6 +45,8 @@ The traced designs are approximations for simulation. Build from each designer's
 
 The left side is the cabinet's **side view**. Every line you draw is a board with real thickness (set in **Design → Board thickness**, 18 mm by default). The cabinet's **width** (how far the drawing extends into the screen) is the **Cabinet width** slider pinned under the chart (it stays put while the rest of the panel scrolls). It runs from the biggest driver's frame + 1" up to 2 × the frame, and a new design starts at the frame + 3". Changing to a driver that doesn't fit moves the width into range.
 
+Width feeds straight into the simulation: every air-path area (throat, mouth, ports) and every chamber volume is its side-view size × the width. The line under the slider shows the throat and mouth areas live. The response usually moves by only a dB or two, mostly around the low hump and in the ripple, because the resonances are set by path *length*, not area. To make that visible, the curve from before you touched the slider stays on the chart as a dashed **Before** line, with the biggest difference written under the slider. Any other edit (or **Clear before**) removes it.
+
 ### Tools (left toolbar)
 
 | Key | Tool | What it does |
