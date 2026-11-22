@@ -63,7 +63,7 @@
   function makePreset(kind) {
     if (kind === 'default' && DEF) return Object.assign(baseDesign(DEF.design.name), JSON.parse(JSON.stringify(DEF.design)));
     const key = design ? design.driverKey : DEFAULT_DRIVER;
-    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
+    const d = baseDesign({ th18sbm: '18in Tapped Horn (Speaker Box Maker)', h1850: '1850 Folded Horn (Rog Mogale)', skram: 'SKRAM 21in (Josh Ricci)', skhorn: 'Skhorn 2x21in (Josh Ricci)', th: 'Tapped horn', flh: 'Front-loaded horn', vented: 'Vented box', sealed: 'Sealed box', blank: 'Untitled' }[kind]);
     d.driverKey = key; if (design) { d.snap = design.snap; d.labelsAlways = design.labelsAlways; d.mirror = design.mirror; }
     const t = d.t, h = t / 2;
     const drv = (x, y, nx, ny) => d.drivers.push({ id: ++d.seq, x, y, nx, ny, key, n: 1, wiring: 'parallel' });
@@ -146,6 +146,25 @@
       const k21 = ['PE:B&C 21DS115 [sheet]', 'PE:B&C 21DS115 8Ω', 'PE:B&C 21DS115 4Ω', 'PE:B&C 21SW152'].find((k) => LIBMAP.has(k)) || key;
       d.driverKey = k21;
       d.drivers.push({ id: ++d.seq, x: 285.8, y: 450, nx: -1, ny: 0, key: k21, n: 1, wiring: 'parallel', mountStyle: 'rear' });
+    }
+    if (kind === 'skhorn') {
+      // Skhorn 2x21" sub — design by Josh Ricci (ZOD Audio), plans hosted by JW Sound with his permission. Sliced from the
+      // published 3-D STEP model. 812.8 deep x 1371.6 high x 609.6 wide, 18 mm panels (12 mm port boards), 573.6 internal
+      // width. Two mirrored halves: the opposed drivers fire into a shared wedge throat that turns out to a horn mouth at
+      // each end of the front; each rear chamber is vented by a 3" slot along the end panel (three vents per side in the
+      // real cab: the vent braces only split the width). Windowed braces and hatch braces are omitted.
+      d.W = 573.6; d.panels = []; d.seq = 0;
+      P(d, 0, 9, 794.8, 9); P(d, 0, 1364.6, 794.8, 1364.6);          // bottom, top (end panels)
+      P(d, 804.8, 0, 804.8, 1373.6);                                     // back (hatch side)
+      P(d, 9, 282.1, 9, 1105.8);                                         // front panel between the two horn mouths
+      P(d, 0, 101.3, 557, 101.3); P(d, 0, 1272.4, 557, 1272.4);          // port boards (12 mm): 3" vents along the end panels
+      d.panels[d.panels.length - 1].t = 12; d.panels[d.panels.length - 2].t = 12;
+      P(d, 199.8, 101.3, 150.3, 567.9); P(d, 199.8, 1272.4, 150.8, 810.2);   // rear-chamber walls / horn path inner walls
+      P(d, 150.3, 567.9, 795.8, 631.8); P(d, 150.8, 810.2, 795.8, 737.8);    // driver baffles G (the wedge throat between them)
+      const k21 = ['PE:B&C 21DS115 [sheet]', 'PE:B&C 21DS115 8Ω', 'PE:B&C 21DS115 4Ω', 'PE:B&C 21SW152'].find((k) => LIBMAP.has(k)) || key;
+      d.driverKey = k21;
+      d.drivers.push({ id: ++d.seq, x: 473, y: 599.9, nx: -0.0985, ny: 0.9951, key: k21, n: 1, wiring: 'parallel' });
+      d.drivers.push({ id: ++d.seq, x: 473.3, y: 774, nx: -0.1116, ny: -0.9938, key: k21, n: 1, wiring: 'parallel' });
     }
     if (kind === 'blank') d.drivers = [];
     d.paths.forEach((q) => { q.auto = true; });
