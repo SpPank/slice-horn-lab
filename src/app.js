@@ -24,18 +24,18 @@
     hrCache.set(sig, hr); return hr;
   }
   /** Cabinet width (the extrusion, into the screen) allowed by the biggest driver: at least its frame + 2", at most 2 x its
-   *  frame, and a new design starts at frame + 3". */
+   *  frame, and a new design starts at frame + 3". (Minimum: frame + 1".) */
   const IN = 25.4;
   function widthRange(d) {
     d = d || design;
     const keys = (d.drivers || []).map((q) => q.key).concat(d.driverKey ? [d.driverKey] : []);
     const dia = Math.max(0, ...keys.map((k) => driverDims(k).outer).filter(isFinite)) || 460;
-    return { dia, min: Math.round(dia + 2 * IN), def: Math.round(dia + 3 * IN), max: Math.round(2 * dia) };
+    return { dia, min: Math.round(dia + 1 * IN), def: Math.round(dia + 3 * IN), max: Math.round(2 * dia) };
   }
   function clampWidth(note) {
     const r = widthRange(), w0 = design.W;
     design.W = Math.min(r.max, Math.max(r.min, design.W));
-    if (note && design.W !== w0) flash(`Cabinet width set to ${toU(design.W)} ${snapMode().unit}: it has to stay between the driver + 2" and 2 x the driver.`);
+    if (note && design.W !== w0) flash(`Cabinet width set to ${toU(design.W)} ${snapMode().unit}: it has to stay between the driver + 1" and 2 x the driver.`);
   }
   function driverDims(key) {
     const s = specOf(key) || {}; const d = s.dims || {};
@@ -2677,7 +2677,7 @@
     const wr = widthRange();
     h += `<h3>Design <span class="pill">${esc(design.name)}</span></h3>
       ${sliderRow('dsWs', 'Cabinet width (inside, into the screen)', design.W, wr.min, wr.max, snapMode().step)}
-      <div class="note">From the driver + 2" (${toU(wr.min)}) to 2 × the driver (${toU(wr.max)}) ${snapMode().unit}; a new design starts at the driver + 3".${design.W < wr.min ? ` This design was published ${toU(wr.min - design.W)} ${snapMode().unit} narrower than that minimum; moving the slider brings it into range.` : ''}</div>
+      <div class="note">From the driver + 1" (${toU(wr.min)}) to 2 × the driver (${toU(wr.max)}) ${snapMode().unit}; a new design starts at the driver + 3".${design.W < wr.min ? ` This design was published ${toU(wr.min - design.W)} ${snapMode().unit} narrower than that minimum; moving the slider brings it into range.` : ''}</div>
       <div class="grid2">
         <label>Name <input type="text" id="dsName" value="${esc(design.name)}"></label>
         <label>Board thickness ${numIn('dsT', toU(design.t))}</label>
