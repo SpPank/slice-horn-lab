@@ -10,3 +10,6 @@ dist/
 node_modules/
 __pycache__/
 *.pyc
+
+# raw scrape dumps used to build data files
+tools/raw/

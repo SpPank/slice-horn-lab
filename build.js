@@ -29,7 +29,7 @@ let peCount = 0;
 if (fs.existsSync(pe)) {
   try {
     const peRows = JSON.parse(fs.readFileSync(pe, 'utf8'));
-    for (const extra of ['pe_lavoce.json', 'pe_celestion.json', 'pe_beyma.json']) {   // more brands (Parts Express + spec sheets)
+    for (const extra of ['pe_lavoce.json', 'pe_celestion.json', 'pe_beyma.json', 'pe_hifi.json']) {   // more brands (Parts Express + spec sheets)
       const f = path.join(root, 'data', extra);
       if (fs.existsSync(f)) { try { peRows.push(...JSON.parse(fs.readFileSync(f, 'utf8'))); } catch (e) { console.warn(extra + ' not readable:', e.message); } }
     }
