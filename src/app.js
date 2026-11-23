@@ -528,6 +528,8 @@
   const unit = () => snapMode().unit;
   const gridStep = () => snapMode().step;
   const isIn = () => unit() === 'in';
+  /** a volume in litres, shown in ft³ while the grid is in inches (1 ft³ = 28.3168 L); d = decimals in litres */
+  const fmtV = (litres, d = 1) => (isIn() ? `${(litres / 28.3168).toFixed(d + 1)} ft³` : `${litres.toFixed(d)} L`);
   const UDIV = { in: 25.4, cm: 10, mm: 1 }, UDP = { in: 2, cm: 1, mm: 0 }, USUF = { in: '"', cm: ' cm', mm: ' mm' };
   function fmtL(mm, dp) {
     if (!isFinite(mm)) return '—';
@@ -1873,7 +1875,7 @@
     if (A && A.regions) A.regions.forEach((r) => {
       if (!r || r.kind !== 'chamber' || r.unused) return;
       const [x, y] = w2s(r.cx, r.cy);
-      tag(`${(r.Vnet || r.V).toFixed(1)} L${r.fb ? ` · fb ${r.fb.toFixed(0)} Hz` : ''}`, x, y, C.chamber, true);
+      tag(`${fmtV(r.Vnet || r.V)}${r.fb ? ` · fb ${r.fb.toFixed(0)} Hz` : ''}`, x, y, C.chamber, true);
     });
     // paths
     if (A && A.paths) A.paths.forEach((P, pi) => drawPath(P, pi));
@@ -2233,7 +2235,7 @@
     const chips = [];
     if (A && A.quads && A.quads.length) {
       const s = HG.summary(design, A);
-      chips.push(`<span class="chip dims">Outside ${fmtL(s.D)} deep × ${fmtL(s.H)} high × ${fmtL(s.Wout)} wide · ${(s.Vext).toFixed(0)} L</span>`);
+      chips.push(`<span class="chip dims">Outside ${fmtL(s.D)} deep × ${fmtL(s.H)} high × ${fmtL(s.Wout)} wide · ${fmtV(s.Vext, 0)}</span>`);
     }
     if (tool === 'panel') chips.push(`<span class="chip">Drawing: ${align === 'center' ? 'centre-line' : align + ' face'} (X)</span>`);
     for (const w of (A && A.warnings) || []) chips.push(`<span class="chip warn">${esc(w)}</span>`);
@@ -2624,7 +2626,7 @@
       const ms = R.maxSpl.filter((v, i) => isFinite(v) && f[i] >= 40 && f[i] <= 100); if (ms.length && (R.Pe || R.Xmax)) items.push(['Max SPL 40–100 Hz', `${Math.min(...ms).toFixed(1)} dB`]);
     }
     if (A && A.paths && A.paths.length) { const P = A.paths[0]; items.push([`Path ${P.src.name} length`, fmtL(P.m.L)]); const e = P.ends; if (e) items.push([`Path ${P.src.name} start → end`, `${(e[0].S * 1e4).toFixed(0)} → ${(e[1].S * 1e4).toFixed(0)} cm²`]); }
-    if (A && A.regions) A.regions.forEach((r) => { if (r && r.kind === 'chamber' && !r.unused) items.push(['Chamber', `${r.Vnet.toFixed(1)} L${r.fb ? ' · ' + r.fb.toFixed(0) + ' Hz' : ''}`]); });
+    if (A && A.regions) A.regions.forEach((r) => { if (r && r.kind === 'chamber' && !r.unused) items.push(['Chamber', `${fmtV(r.Vnet)}${r.fb ? ' · ' + r.fb.toFixed(0) + ' Hz' : ''}`]); });
     el.innerHTML = items.slice(0, 9).map(([a, b]) => `<div><span>${esc(a)}</span><b title="${esc(b)}">${esc(b)}</b></div>`).join('');
     el.hidden = !items.length;
   }
@@ -2718,7 +2720,7 @@
     const P = A && A.paths && A.paths[0], e = P && P.ends, cm2 = (v) => (v * 1e4).toFixed(0);
     if (e) bits.push(`${e[0].kind === 'open' ? 'Mouth' : e[0].kind === 'chamber' && e[0].endCorr ? 'Port' : 'Throat'} <b>${cm2(e[0].S)}</b> → ${e[1].kind === 'open' ? 'mouth' : 'end'} <b>${cm2(e[1].S)} cm²</b>`);
     const ch = ((A && A.regions) || []).filter((r) => r && r.kind === 'chamber' && !r.unused);
-    if (ch.length) bits.push(`chamber${ch.length > 1 ? 's' : ''} <b>${ch.map((r) => r.Vnet.toFixed(1)).join(' + ')} L</b>`);
+    if (ch.length) bits.push(`chamber${ch.length > 1 ? 's' : ''} <b>${ch.map((r) => fmtV(r.Vnet)).join(' + ')}</b>`);
     bits.push(`outside ${toU(design.W + 2 * design.t)} ${u}`);
     const gd = ghostDelta();
     if (gd) bits.push(`<span class="wdelta">vs ${fmtL(gd.W)}: ${Math.abs(gd.d) < 0.05 ? 'no change' : `up to ${gd.d > 0 ? '+' : '−'}${Math.abs(gd.d).toFixed(1)} dB (at ${gd.f.toFixed(0)} Hz)`}</span>`);
@@ -2825,7 +2827,7 @@
     if (one && one.t === 'driver') {
       const d = design.drivers.find((q) => q.id === one.id); if (!d) { sel = []; return inspector(); }
       const s = specOf(d.key) || {}, di = A && A.driverInfo && A.driverInfo.find((q) => q.d.id === d.id);
-      const side = (sd) => !sd ? '—' : sd.kind === 'air' ? '<span class="pill air">open air</span>' : sd.kind === 'chamber' ? `<span class="pill ch">chamber ${A.regions[sd.label] ? A.regions[sd.label].Vnet.toFixed(1) + ' L' : ''}</span>` : sd.kind === 'path' ? `<span class="pill path">path ${nameOf(sd.path)} at ${fmtL(sd.s)}</span>` : '<span class="pill bad">blocked by a board</span>';
+      const side = (sd) => !sd ? '—' : sd.kind === 'air' ? '<span class="pill air">open air</span>' : sd.kind === 'chamber' ? `<span class="pill ch">chamber ${A.regions[sd.label] ? fmtV(A.regions[sd.label].Vnet) : ''}</span>` : sd.kind === 'path' ? `<span class="pill path">path ${nameOf(sd.path)} at ${fmtL(sd.s)}</span>` : '<span class="pill bad">blocked by a board</span>';
       const ts = HC.driverToTS(hrOf(d.key) || { Sd: 855, Mmd: 200, Cms: 1e-4, Rms: 5, Re: 5, Bl: 20 });
       const fields = [['Fs', 'Hz'], ['Qes', ''], ['Qms', ''], ['Vas', 'L'], ['Re', 'Ω'], ['Le', 'mH'], ['Sd', 'cm²'], ['Mms', 'g'], ['Bl', 'T·m'], ['Xmax', 'mm'], ['Pe', 'W']];
       h += `<h3>Driver <span class="pill">${esc(label(s))}</span></h3>
