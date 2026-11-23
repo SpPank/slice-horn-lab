@@ -3377,7 +3377,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     design.paths = [...manual, ...fresh];
     fresh.forEach((q) => { if (!q.name) q.name = nextPathName(); });
   }
-  function changed() { syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
+  function changed() { sliding = false; syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
   function liveChanged() { if (liveRaf) return; liveRaf = requestAnimationFrame(() => { liveRaf = 0; syncArcsIn(design); syncDrivers(); if (design.autoPaths && performance.now() - lastAuto > 180 && !(drag && drag.kind === 'vert')) regenAutoPaths(); analyse(); draw(); }); }
   let flashTimer = null;
   function flash(msg) { const h = $('hint'); h.textContent = msg; h.style.color = 'var(--accent)'; clearTimeout(flashTimer); flashTimer = setTimeout(() => { h.style.color = ''; h.textContent = HINTS[tool]; }, 2600); }
@@ -4234,7 +4234,19 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function numIn(id, val, attrs = '') { return `<input class="num" id="${id}" type="text" inputmode="decimal" value="${val}" ${attrs}>`; }
 
   // ---- sliders: live while dragging (no inspector rebuild), one undo step per drag
-  let sliding = false;
+  let sliding = false, slideRedo = null;
+  function slideStart() { if (sliding) return; slideRedo = redo.slice(); commit(); sliding = true; }
+  /** A slider press ends on release, key-up or loss of focus, whether or not the value moved. (A press that moves nothing
+   *  fires no `change` event; waiting for one left `sliding` set, and the width slider and Design panel frozen on whatever
+   *  they showed at that moment, old limits included.) */
+  function slideEnd() {
+    if (!sliding) return;
+    sliding = false;
+    if (undo.length && undo[undo.length - 1] === snapshot()) { undo.pop(); redo.push(...(slideRedo || [])); refreshSide(); }   // nothing moved: no undo step
+    else changed();
+    slideRedo = null;
+  }
+  addEventListener('pointerup', slideEnd, true); addEventListener('pointercancel', slideEnd, true);
   const r2 = (v) => Math.round(v * 100) / 100;
   function sliderRow(id, labelTxt, val, min, max, step, isAngle) {
     const shown = isAngle ? val.toFixed(1) : toU(val);
@@ -4243,10 +4255,10 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   function bindSlider(id, apply, isAngle, root) {
     const r = (root || document).querySelector('#' + CSS.escape(id)), tbox = (root || document).querySelector('#' + CSS.escape(id + '_t'));
     if (!r) return;
-    const start = () => { if (!sliding) { commit(); sliding = true; } };
+    const start = slideStart;
     r.addEventListener('pointerdown', start); r.addEventListener('keydown', start);
     r.addEventListener('input', () => { start(); const v = +r.value; apply(isAngle ? v : roundStep(v)); if (tbox) tbox.value = isAngle ? v.toFixed(1) : toU(roundStep(v)); liveChanged(); });
-    r.addEventListener('change', () => { sliding = false; changed(); });
+    ['change', 'keyup', 'blur'].forEach((ev) => r.addEventListener(ev, slideEnd));
     if (tbox) tbox.addEventListener('change', () => { commit(); apply(isAngle ? +tbox.value : parseL(tbox.value)); changed(); });
   }
   function pivotOf(p) { const g = design.growFrom || 'start'; return g === 'end' ? { x: p.x2, y: p.y2, f: 1 } : g === 'center' ? { x: (p.x1 + p.x2) / 2, y: (p.y1 + p.y2) / 2, f: 0.5 } : { x: p.x1, y: p.y1, f: 0 }; }
@@ -4314,7 +4326,13 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     else bits.push(`range ${toU(wr.min)}–${toU(wr.max)} ${u}`);
     el.innerHTML = bits.join(' · ');
   }
-  function refreshSide() { drawChart(); refreshLegend(); stats(); if (!sliding) { widthBar(); inspector(); } else widthNote(); }
+  function refreshSide() {
+    drawChart(); refreshLegend(); stats();
+    if (sliding) { widthNote(); return; }
+    const a = document.activeElement, fid = a && a.type === 'range' ? a.id : '';
+    widthBar(); inspector();
+    if (fid) { const e = $(fid); if (e && e !== document.activeElement) e.focus({ preventScroll: true }); }   // the rebuild replaces the sliders: keep the keyboard on the one in use
+  }
   function inspector() {
     const el = $('insp'); let h = '';
     const one = sel.length === 1 ? sel[0] : null;
