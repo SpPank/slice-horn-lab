@@ -7334,5 +7334,108 @@
   "pe_rating_std": "Eminence Power Rating (product page; standard not stated)",
   "application": "bass guitar (Eminence CannaBass)",
   "spl_ref": "1W/1m"
+ },
+ {
+  "brand": "B&C",
+  "model": "12SW115",
+  "source": "mfr_sheet",
+  "url": "https://www.bcspeakers.com/en/products/lf-driver/12/4/12SW115",
+  "product_url": "https://www.bcspeakers.com/en/products/lf-driver/12/4/12SW115",
+  "size_in": 12,
+  "nominal_ohms": 4,
+  "Fs": 39.0,
+  "Re": 3.1,
+  "Le_mH": 1.35,
+  "Qms": 9.8,
+  "Qes": 0.26,
+  "Qts": 0.25,
+  "Vas_L": 33.0,
+  "Sd_cm2": 522.0,
+  "Mms_g": 192.0,
+  "Bl": 23.8,
+  "Xmax_mm": 13.8,
+  "Xvar_mm": 10.5,
+  "Pe_W": 1700.0,
+  "Pe_max_W": 3400.0,
+  "SPL_dB": 92.0,
+  "vc_dia_mm": 115.0,
+  "mag": "neo",
+  "dims": {
+   "outer_dia": 315.0,
+   "cutout_dia": 283.0,
+   "bolt_circle": 298.0,
+   "bolt_count": 8,
+   "bolt_hole_dia": 7.0,
+   "depth_total": 167.0,
+   "flange_thickness": 13.0,
+   "magnet_dia": 168.0,
+   "magnet_depth": 78.0,
+   "displacement_L": 3.4
+  },
+  "dims_source": "drawing",
+  "dims_notes": "From the dimension drawing on the product page: OD 315, BC 298, 8 slotted holes 7 x 8.8, flange 13, basket 284, motor d168, depth 167. Cutout 283 and displacement 3.4 L from the page table. magnet_depth scaled off the side view.",
+  "data_warnings": [
+   "The page table gives flange and gasket thickness 12 mm; the drawing shows 13 mm (13 used)."
+  ],
+  "prof": [
+   [
+    0,
+    157.5
+   ],
+   [
+    13,
+    157.5
+   ],
+   [
+    13,
+    142
+   ],
+   [
+    28,
+    139
+   ],
+   [
+    45,
+    129
+   ],
+   [
+    72,
+    113
+   ],
+   [
+    89,
+    96
+   ],
+   [
+    89,
+    86
+   ],
+   [
+    101,
+    86
+   ],
+   [
+    103,
+    84
+   ],
+   [
+    159,
+    84
+   ],
+   [
+    164,
+    81
+   ],
+   [
+    167,
+    76
+   ],
+   [
+    167,
+    0
+   ]
+  ],
+  "discontinued": false,
+  "spl_ref": "1W/1m"
  }
 ]

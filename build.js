@@ -64,7 +64,8 @@ if (fs.existsSync(mfr)) {
       const Qes = d.Qes || (d.Qts && d.Qms ? 1 / (1 / d.Qts - 1 / d.Qms) : undefined);
       lib.push({ k, b: d.brand, m: model + (d.discontinued ? ' (discontinued)' : ''), src: `${d.brand} datasheet`,
         Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, url: d.url, dims: d.dims || undefined,
-        size: d.size_in || undefined, prof: d.drawing_file ? profFor('sheets_mfr/' + path.basename(d.drawing_file)) : undefined });
+        size: d.size_in || undefined, mag: d.mag || undefined,
+        prof: d.prof || (d.drawing_file ? profFor('sheets_mfr/' + path.basename(d.drawing_file)) : undefined) });   // d.prof: an outline read off the drawing by hand
       mfrCount++;
     }
   } catch (e) { console.warn('mfr_drivers.json not readable yet:', e.message); }
@@ -97,6 +98,7 @@ const page = rd('src/template.html')
   .replace('/*APP*/', () => rd('src/app.js'));
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'artifact.html'), page);
+fs.writeFileSync(path.join(root, 'dist', 'driver_lib.json'), JSON.stringify(lib));   // the same library, for other local tools
 const full = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
   page.replace(/<div class="app">/, '</head>\n<body>\n<div class="app">') + '\n</body>\n</html>\n';
 fs.writeFileSync(path.join(root, 'SliceHornLab.html'), full);
