@@ -3186,6 +3186,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       const dx = wx - o.from.x, dy = wy - o.from.y;
       if (rh.ang != null) { const ux = Math.cos(rh.ang) * MX(), uy = Math.sin(rh.ang), sg = Math.sign(dx * ux + dy * uy) || 1; axis = { x: ux * sg, y: uy * sg }; }
       else if (UI.ortho !== mods.shift) axis = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+      else if (!mods.alt) axis = squareLock(dx, dy);   // Ortho off: still lock when within 2 degrees of square (Alt frees it)
     }
     if (axis) { const L = (wx - o.from.x) * axis.x + (wy - o.from.y) * axis.y; wx = o.from.x + axis.x * L; wy = o.from.y + axis.y * L; }   // object snaps are looked for along the locked line
     let s = snap0(wx, wy, o, UI.gsnap ? gridStep() : 0.01, axis);
@@ -3196,6 +3197,13 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       s = { x: o.from.x + dx / L * rh.dist, y: o.from.y + dy / L * rh.dist, kind: 'dist' };
     }
     return s;
+  }
+  /** A direction within 2 degrees of horizontal or vertical (so 88 to 92 degrees, or -2 to 2) snaps to exactly square:
+   *  returns that unit direction, or null. Holding the key that frees the angle (Shift while drawing, Alt on an end) skips it. */
+  function squareLock(dx, dy) {
+    if (!dx && !dy) return null;
+    const ang = Math.atan2(dy, dx), q = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
+    return Math.abs(ang - q) <= 2 * Math.PI / 180 ? { x: Math.round(Math.cos(q)), y: Math.round(Math.sin(q)) } : null;
   }
   function snap0(wx, wy, opt, g, axis) {
     const tol = 11 / view.k;
@@ -3215,7 +3223,9 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       const dx = wx - opt.from.x, dy = wy - opt.from.y, ang = Math.atan2(dy, dx), st = Math.PI / 4;
       const a2 = Math.round(ang / st) * st, ux = Math.cos(a2), uy = Math.sin(a2);
       const off = Math.abs(dx * uy - dy * ux) * view.k;
-      if (off < 5 && Math.abs(ang - a2) < 2.5 * Math.PI / 180) ortho = { x: ux, y: uy };
+      const sq = squareLock(dx, dy);   // within 2 degrees of square (88 to 92 degrees): always lock to it
+      if (sq) ortho = sq;
+      else if (off < 5 && Math.abs(ang - a2) < 2.5 * Math.PI / 180) ortho = { x: ux, y: uy };
     }
     if (!opt.noObjects) {
       for (const { q } of quads) for (const [a, b] of HG.quadEdges(q)) {
@@ -3322,7 +3332,14 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       if (RH()) {   // Ctrl-click removes, Shift-click adds, and dragging one of several selected things moves them all
         const st = selOf(h);
         if (e.ctrlKey || e.metaKey) { sel = sel.filter((q) => !(q.t === st.t && q.id === st.id)); refreshSide(); draw(); return; }
-        if (e.shiftKey || picking) { if (!isSel(st.t, st.id)) sel = [...sel, st]; refreshSide(); draw(); return; }
+        if (e.shiftKey || picking) {
+          if (!isSel(st.t, st.id)) sel = [...sel, st];
+          refreshSide();
+          if (picking) { draw(); return; }
+          // Shift-click adds to the selection, and a drag that follows still works: several things move together
+          // (Shift keeps the move square); a single board falls through to its normal grab, with Ortho flipped.
+          if (sel.length > 1) { commit(); drag = moveDrag(wx, wy); draw(); return; }
+        }
         if (sel.length > 1 && isSel(st.t, st.id)) { commit(); drag = moveDrag(wx, wy); refreshSide(); draw(); return; }
       }
       commit();
