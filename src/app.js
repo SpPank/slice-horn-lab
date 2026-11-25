@@ -9,6 +9,24 @@
   const hyp = Math.hypot;
   const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
 
+  // ---------------------------------------------------------------- controls (Rhino-style or Classic) + viewport layout
+  // Kept per browser, not in the design file: how the mouse and keys behave, which viewports show, the modelling aids.
+  // The Rhino-style command line is offered only when the app runs on this computer (opened from disk, or served on
+  // localhost); the public page keeps the classic controls. localStorage shl.rhino = 'off' hides it locally too, to
+  // see exactly what the public page shows.
+  const RH_OK = (location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) && LS.get('shl.rhino') !== 'off';
+  const UI = Object.assign({ controls: 'classic', layout: null, prev: null, max3d: 'persp', ortho: false, gsnap: true, osnap: true, mode3d: 'shaded', sides: 'ghost' },
+    (() => { try { return JSON.parse(LS.get('shl.ui') || '{}'); } catch (e) { return {}; } })());
+  if (!RH_OK) UI.controls = 'classic';
+  const RH = () => RH_OK && UI.controls === 'rhino';
+  const saveUI = () => LS.set('shl.ui', JSON.stringify(UI));
+  const mods = { shift: false, ctrl: false, alt: false };   // modifier keys right now (Shift flips Ortho in Rhino mode)
+  for (const ev of ['keydown', 'keyup', 'pointerdown', 'pointermove']) window.addEventListener(ev, (e) => { mods.shift = !!e.shiftKey; mods.ctrl = !!(e.ctrlKey || e.metaKey); mods.alt = !!e.altKey; }, true);
+  const rh = { dist: null, ang: null };                     // typed constraints for the next point: a distance, an angle
+  let cmd = null, lastCmd = null;                           // the running command, and the one Enter repeats
+  const orthoKey = (e) => (RH() ? UI.ortho !== !!e.shiftKey : !!e.shiftKey);   // constrain a drag to one axis?
+  const looseKey = (e) => (RH() ? !!e.altKey : !!e.shiftKey);                 // drag one board end without the ends joined to it?
+
   // ---------------------------------------------------------------- driver library
   const LIB = (window.DRIVER_LIB || []).slice();
   const LIBMAP = new Map(LIB.map((d) => [d.k, d]));
@@ -55,8 +73,8 @@
   const undo = [], redo = [];
   function snapshot() { return JSON.stringify(design); }
   function commit() { undo.push(snapshot()); if (undo.length > 120) undo.shift(); redo.length = 0; }
-  function doUndo() { if (!undo.length) return; redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = []; changed(); renderSnap(); }
-  function doRedo() { if (!redo.length) return; undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = []; changed(); renderSnap(); }
+  function doUndo() { if (!undo.length) return; if (cmd) endCmd(); redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = []; changed(); renderSnap(); }
+  function doRedo() { if (!redo.length) return; if (cmd) endCmd(); undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = []; changed(); renderSnap(); }
   const nid = () => (design.seq = (design.seq || 0) + 1);
   // ---------------------------------------------------------------- curved boards (bent-ply arcs)
   // design.arcs = [{ id, a, m, b }]: a and b are the ends of the board's centre-line, m a point it passes through.
@@ -488,19 +506,25 @@
     for (const p of design.panels) { xs.push(p.x1, p.x2); ys.push(p.y1, p.y2); }
     for (const p of design.paths) for (const q of p.pts) { xs.push(q.x); ys.push(q.y); }
     if (!xs.length) { xs.push(-200, 1000); ys.push(-200, 800); }
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    fitBox(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
+    view.auto = true;   // still framed as fitted: a resize re-fits until the user pans or zooms
+  }
+  function fitBox(x0, x1, y0, y1) {
     // leave room for the overall dimension lines (left and above, 10 % out) and the hint bar along the top
-    const bw = Math.max(100, x1 - x0), bh = Math.max(100, y1 - y0), pad = 60;
-    view.k = Math.min((view.w - 2 * pad - 40) / (1.14 * bw), (view.h - 150) / (1.14 * bh));
+    // (less of it in a small viewport, where fixed margins would leave no room for the drawing)
+    const bw = Math.max(100, x1 - x0), bh = Math.max(100, y1 - y0), padX = Math.min(160, 0.3 * view.w), padY = Math.min(150, 0.3 * view.h);
+    view.auto = false;
+    view.k = Math.max(0.03, Math.min((view.w - padX) / (1.14 * bw), (view.h - padY) / (1.14 * bh)));
     view.tx = view.w / 2 + 0.06 * bw * view.k - MX() * (x0 + x1) / 2 * view.k;
     view.ty = view.h / 2 + 0.06 * bh * view.k + 12 + (y0 + y1) / 2 * view.k;
   }
+  let fitted = false;   // the first fit waits until the drawing viewport has a real size (it can start hidden or collapsed)
+  const fitOk = () => view.w > 60 && view.h > 180;
   function resize() {
     const r = cv.getBoundingClientRect(); view.dpr = window.devicePixelRatio || 1;
-    const first = view.w <= 1;
     view.w = r.width; view.h = r.height;
     cv.width = Math.round(r.width * view.dpr); cv.height = Math.round(r.height * view.dpr);
-    if (first) fit();
+    if (fitOk() && (!fitted || view.auto)) { fit(); fitted = true; }
     const cr = chartCv.getBoundingClientRect();
     chartCv.width = Math.round(cr.width * view.dpr); chartCv.height = Math.round(cr.height * view.dpr);
     draw(); drawChart();
@@ -1100,15 +1124,29 @@
     driver: 'Click on a board to mount a driver there · it faces the side you clicked · F flips it',
     boundary: 'Draw a line that seals off a chamber without adding wood (e.g. to split one volume into two)',
   };
-  function setTool(t) { tool = t; draft = null; renderTools(); $('hint').textContent = HINTS[t]; draw(); }
+  // Rhino mode: prompts are on the command line, so the chip over the drawing stays empty (hidden) while selecting
+  const HINTS_RH = { select: '' };
+  const hintOf = (t) => (RH() && HINTS_RH[t] != null ? HINTS_RH[t] : HINTS[t]);
+  // Rhino mode: the toolbar starts the matching command (Line and Rectangle ask for points; the others use the tool)
+  const TOOLCMD = { panel: 'Line', arc: 'Arc', box: 'Rectangle', path: 'AirPath', driver: 'Driver', boundary: 'Divider' };
+  const CMDTOOL = { Line: 'panel', Polyline: 'panel', Rectangle: 'box' };
+  function pickTool(id) {
+    if (!RH()) { setTool(id); return; }
+    if (id === 'select') { cmdCancel(true); setTool('select'); } else runCmd(TOOLCMD[id]);
+  }
+  function markTool() { const on = (cmd && CMDTOOL[cmd.name]) || tool; document.querySelectorAll('#tools [data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === on)); }
+  function setTool(t) { tool = t; draft = null; renderTools(); $('hint').textContent = hintOf(t); draw(); }
   function renderTools() {
     const el = $('tools');
-    el.innerHTML = TOOLS.map((t) => `<button class="${tool === t.id ? 'on' : ''}" data-tool="${t.id}" title="${t.name} (${t.key})" aria-label="${t.name}"><svg viewBox="0 0 24 24">${t.icon}</svg></button>`).join('') +
+    el.innerHTML = TOOLS.map((t) => `<button class="${tool === t.id ? 'on' : ''}" data-tool="${t.id}" title="${t.name} (${RH() ? (TOOLCMD[t.id] || 'Esc') : t.key})" aria-label="${t.name}"><svg viewBox="0 0 24 24">${t.icon}</svg></button>`).join('') +
       '<hr><button data-act="fit" title="Zoom to fit (0)" aria-label="Zoom to fit"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>' +
       `<button data-act="autopath" class="${design && design.autoPaths ? 'on' : ''}" title="Find air paths automatically (${design && design.autoPaths ? 'on' : 'off'})" aria-label="Automatic air paths"><svg viewBox="0 0 24 24"><path d="M4 19c3-9 6-12 16-14" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/><path d="M15 15l2 2 4-5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="19" r="2" fill="currentColor"/></svg></button>` +
       '<button data-act="center" title="Centre all paths in their channels" aria-label="Centre paths"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 19h18M6 12h12" stroke="currentColor" stroke-width="2"/></svg></button>' +
+      `<button data-act="v3d" class="${layoutNow() !== '2d' ? 'on' : ''}" title="3-D view beside the drawing" aria-label="3-D view" aria-pressed="${layoutNow() !== '2d'}"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>` +
       `<button data-act="help" class="helpbtn ${helpOpen ? 'on' : ''}" title="How to use it (?)" aria-label="Help" aria-expanded="${helpOpen}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.2 9.3a2.9 2.9 0 1 1 4.3 2.5c-.9.5-1.5 1.1-1.5 2.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.3" fill="currentColor"/></svg></button>`;
-    el.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => setTool(b.dataset.tool));
+    el.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => pickTool(b.dataset.tool));
+    el.querySelector('[data-act=v3d]').onclick = () => setLayout(layoutNow() === '2d' ? 'split' : '2d');
+    markTool();
     el.querySelector('[data-act=fit]').onclick = () => { fit(); draw(); };
     el.querySelector('[data-act=autopath]').onclick = () => { commit(); design.autoPaths = !design.autoPaths; design.autoMute = []; renderTools(); changed(); flash(design.autoPaths ? 'Air paths are found automatically from the boards.' : 'Automatic air paths off — draw paths with the path tool (A).'); };
     el.querySelector('[data-act=center]').onclick = () => { commit(); design.paths.forEach(centerPath); changed(); };
@@ -1138,8 +1176,29 @@
     if (u < -1e-6 || u > 1 + 1e-6) return null;
     return { x: a.x + ex * u, y: a.y + ey * u };
   }
+  /** Where the pointer lands. Classic: the 0/45/90° "magnet" unless opt.free. Rhino mode: Osnap, Grid Snap and Ortho come
+   *  from the status bar (Shift flips Ortho), and a typed distance or angle constrains the point relative to opt.from. */
   function snap(wx, wy, opt = {}) {
-    const tol = 11 / view.k, g = gridStep();
+    if (!RH()) return snap0(wx, wy, opt, gridStep(), null);
+    const o = { ...opt, free: true, noObjects: opt.noObjects || !UI.osnap };
+    let axis = null;
+    if (o.from) {
+      const dx = wx - o.from.x, dy = wy - o.from.y;
+      if (rh.ang != null) { const ux = Math.cos(rh.ang) * MX(), uy = Math.sin(rh.ang), sg = Math.sign(dx * ux + dy * uy) || 1; axis = { x: ux * sg, y: uy * sg }; }
+      else if (UI.ortho !== mods.shift) axis = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 };
+    }
+    if (axis) { const L = (wx - o.from.x) * axis.x + (wy - o.from.y) * axis.y; wx = o.from.x + axis.x * L; wy = o.from.y + axis.y * L; }   // object snaps are looked for along the locked line
+    let s = snap0(wx, wy, o, UI.gsnap ? gridStep() : 0.01, axis);
+    if (o.from && rh.ang != null) { const L = (s.x - o.from.x) * axis.x + (s.y - o.from.y) * axis.y; s = { x: o.from.x + axis.x * L, y: o.from.y + axis.y * L, kind: s.kind }; }
+    if (o.from && rh.dist != null) {
+      let dx = s.x - o.from.x, dy = s.y - o.from.y, L = hyp(dx, dy);
+      if (L < 1e-6) { dx = wx - o.from.x; dy = wy - o.from.y; L = hyp(dx, dy) || 1; }
+      s = { x: o.from.x + dx / L * rh.dist, y: o.from.y + dy / L * rh.dist, kind: 'dist' };
+    }
+    return s;
+  }
+  function snap0(wx, wy, opt, g, axis) {
+    const tol = 11 / view.k;
     const quads = quadsOf(opt.exclude);
     let best = null;
     const consider = (x, y, kind, pri) => { const d = hyp(x - wx, y - wy); if (d < tol && (!best || pri < best.pri || (pri === best.pri && d < best.d))) best = { x, y, kind, pri, d }; };
@@ -1149,8 +1208,8 @@
     }
     if (best) return best;
     // orthogonal lock from an anchor
-    let ortho = null;
-    if (opt.from && !opt.free) {
+    let ortho = axis;
+    if (!ortho && opt.from && !opt.free) {
       // a narrow magnetic band, not a wide cone: the cursor has to sit within ~5 screen px of the straight (0/45/90 deg)
       // line AND within 2.5 deg of it, so a long board leaves the lock with a small sideways nudge (Alt turns it off)
       const dx = wx - opt.from.x, dy = wy - opt.from.y, ang = Math.atan2(dy, dx), st = Math.PI / 4;
@@ -1161,7 +1220,7 @@
     if (!opt.noObjects) {
       for (const { q } of quads) for (const [a, b] of HG.quadEdges(q)) {
         if (ortho) { const ip = lineIntersect(opt.from, ortho, a, b); if (ip) consider(ip.x, ip.y, 'face', 2); }
-        const n = nearestOnSeg(wx, wy, a, b); consider(n.x, n.y, 'face', 3);
+        if (!axis) { const n = nearestOnSeg(wx, wy, a, b); consider(n.x, n.y, 'face', 3); }   // a hard lock only takes faces where they cross the locked line
       }
     }
     if (best) return best;
@@ -1249,14 +1308,22 @@
     try { cv.setPointerCapture(e.pointerId); } catch (err) { }
     const [sx, sy] = pt(e), [wx, wy] = s2w(sx, sy);
     mouse = { x: sx, y: sy, wx, wy };
-    closeCtx();
+    closeCtx(); setActiveVp('2d');
     if (e.button === 1 || e.button === 2 || spaceDown) { drag = { kind: 'pan', sx, sy, tx: view.tx, ty: view.ty, click: true, button: e.button }; return; }
+    if (RH() && cmdWantsPoint()) { cmdGotPoint(cmdPoint(wx, wy)); return; }   // a running command is asking for a point
     if (tool === 'select') {
-      const h = hit(wx, wy);
+      const h = hit(wx, wy), picking = RH() && !!(cmd && cmd.step && cmd.step.select);
       if (!h) {
-        if (e.shiftKey) drag = { kind: 'marquee', wx, wy, x2: wx, y2: wy };
+        if (RH()) drag = { kind: 'marquee', wx, wy, x2: wx, y2: wy, rhino: true, add: e.shiftKey || picking, sub: e.ctrlKey || e.metaKey };   // window / crossing box
+        else if (e.shiftKey) drag = { kind: 'marquee', wx, wy, x2: wx, y2: wy };
         else { sel = []; drag = { kind: 'pan', sx, sy, tx: view.tx, ty: view.ty, click: true }; refreshSide(); }
         draw(); return;
+      }
+      if (RH()) {   // Ctrl-click removes, Shift-click adds, and dragging one of several selected things moves them all
+        const st = selOf(h);
+        if (e.ctrlKey || e.metaKey) { sel = sel.filter((q) => !(q.t === st.t && q.id === st.id)); refreshSide(); draw(); return; }
+        if (e.shiftKey || picking) { if (!isSel(st.t, st.id)) sel = [...sel, st]; refreshSide(); draw(); return; }
+        if (sel.length > 1 && isSel(st.t, st.id)) { commit(); drag = moveDrag(wx, wy); refreshSide(); draw(); return; }
       }
       commit();
       if (h.t === 'arcpt') { sel = [{ t: 'arc', id: h.id }]; drag = { kind: 'arcpt', id: h.id, k: h.k }; refreshSide(); draw(); return; }
@@ -1276,7 +1343,7 @@
         drag = { kind: 'driver', id: h.id, rel: along > 0 ? -1 : 1, flipped: false, good: snap0, bad: null }; refreshSide(); return; }
       const t = h.t;
       if (!isSel(t, h.id)) sel = e.shiftKey ? [...sel, { t, id: h.id }] : [{ t, id: h.id }];
-      drag = { kind: 'move', wx, wy, orig: JSON.parse(JSON.stringify({ panels: design.panels, paths: design.paths, drivers: design.drivers, boundaries: design.boundaries })), moved: false };
+      drag = moveDrag(wx, wy);
       refreshSide(); draw(); return;
     }
     if (tool === 'panel' || tool === 'boundary') {
@@ -1308,18 +1375,28 @@
     }
     if (tool === 'driver') { placeDriver(wx, wy); return; }
   });
+  const moveDrag = (wx, wy) => ({ kind: 'move', wx, wy, orig: JSON.parse(JSON.stringify({ panels: design.panels, paths: design.paths, drivers: design.drivers, boundaries: design.boundaries, arcs: design.arcs || [] })), moved: false });
+  /** the selectable thing a hit belongs to (a grabbed end or vertex selects its board, divider, curved board or path) */
+  function selOf(h) {
+    if (h.t === 'pend') return { t: 'panel', id: h.id };
+    if (h.t === 'bend') return { t: 'boundary', id: h.id };
+    if (h.t === 'arcpt') return { t: 'arc', id: h.id };
+    if (h.t === 'vert') return { t: 'path', id: h.id };
+    return { t: h.t, id: h.id };
+  }
   cv.addEventListener('pointermove', (e) => {
     const [sx, sy] = pt(e), [wx, wy] = s2w(sx, sy);
     mouse = { x: sx, y: sy, wx, wy };
+    if (RH()) showCoords(wx, wy);
     if (drag) {
-      if (drag.kind === 'pan') { view.tx = drag.tx + sx - drag.sx; view.ty = drag.ty + sy - drag.sy; if (hyp(sx - drag.sx, sy - drag.sy) > 3) drag.click = false; draw(); return; }
+      if (drag.kind === 'pan') { view.tx = drag.tx + sx - drag.sx; view.ty = drag.ty + sy - drag.sy; if (hyp(sx - drag.sx, sy - drag.sy) > 3) { drag.click = false; view.auto = false; } draw(); return; }
       if (drag.kind === 'marquee') { drag.x2 = wx; drag.y2 = wy; draw(); return; }
       if (drag.kind === 'pend' || drag.kind === 'bend') {
         const arr = drag.kind === 'pend' ? design.panels : design.boundaries;
         const p = arr.find((q) => q.id === drag.id);
         const other = drag.end === 1 ? { x: p.x2, y: p.y2 } : { x: p.x1, y: p.y1 };
         // ends joined at this corner move together; holding Shift pulls this end loose on its own
-        const together = !e.shiftKey && drag.joints.length;
+        const together = !looseKey(e) && drag.joints.length;
         const excl = new Set([p.id, ...(together ? drag.joints.filter((j) => j.kind === 'pend').map((j) => j.id) : [])]);
         const s = snap(wx, wy, { from: other, exclude: excl, free: e.altKey });
         if (drag.end === 1) { p.x1 = r2(s.x); p.y1 = r2(s.y); } else { p.x2 = r2(s.x); p.y2 = r2(s.y); }
@@ -1328,7 +1405,7 @@
           const q = (j.kind === 'pend' ? design.panels : design.boundaries).find((r) => r.id === j.id); if (!q) continue;
           if (j.end === 1) { q.x1 = r2(j.x + dx); q.y1 = r2(j.y + dy); } else { q.x2 = r2(j.x + dx); q.y2 = r2(j.y + dy); }
         }
-        drag.loose = !!(e.shiftKey && drag.joints.length);
+        drag.loose = !!(looseKey(e) && drag.joints.length);
         snapInfo = s; liveChanged(); return;
       }
       if (drag.kind === 'arcpt') {
@@ -1345,7 +1422,7 @@
       if (drag.kind === 'arcmove') {
         const g = design.arcs.find((q) => q.id === drag.id); if (!g) return;
         const gs = gridStep(); let dx = Math.round((wx - drag.wx) / gs) * gs, dy = Math.round((wy - drag.wy) / gs) * gs;
-        if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        if (orthoKey(e)) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
         for (const k of ['a', 'm', 'b']) g[k] = { x: drag.orig[k].x + dx, y: drag.orig[k].y + dy };
         drag.moved = drag.moved || dx || dy; liveChanged(); return;
       }
@@ -1368,9 +1445,10 @@
       if (drag.kind === 'move') {
         const g = gridStep();
         let dx = Math.round((wx - drag.wx) / g) * g, dy = Math.round((wy - drag.wy) / g) * g;
-        if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        if (orthoKey(e)) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
         const o = drag.orig;
         for (const s of sel) {
+          if (s.t === 'arc') { const p = (design.arcs || []).find((q) => q.id === s.id), q = (o.arcs || []).find((q) => q.id === s.id); if (p && q) for (const k of ['a', 'm', 'b']) p[k] = { x: q[k].x + dx, y: q[k].y + dy }; }
           if (s.t === 'panel') { const p = design.panels.find((q) => q.id === s.id), q = o.panels.find((q) => q.id === s.id); if (p && q) { p.x1 = q.x1 + dx; p.x2 = q.x2 + dx; p.y1 = q.y1 + dy; p.y2 = q.y2 + dy; } }
           if (s.t === 'boundary') { const p = design.boundaries.find((q) => q.id === s.id), q = o.boundaries.find((q) => q.id === s.id); if (p && q) { p.x1 = q.x1 + dx; p.x2 = q.x2 + dx; p.y1 = q.y1 + dy; p.y2 = q.y2 + dy; } }
           if (s.t === 'path') { const p = design.paths.find((q) => q.id === s.id), q = o.paths.find((q) => q.id === s.id); if (p && q) { p.pts = q.pts.map((v) => ({ x: v.x + dx, y: v.y + dy })); if (dx || dy) p.auto = false; } }
@@ -1380,6 +1458,7 @@
         liveChanged(); return;
       }
     }
+    if (RH() && cmdWantsPoint()) { const p = cmdPoint(wx, wy); cmd.cur = p; snapInfo = p; if (cmd.step.live) cmd.step.live(p); cv.style.cursor = 'crosshair'; draw(); return; }
     if (draft) {
       if (draft.kind === 'panel' || draft.kind === 'boundary') { const s = snap(wx, wy, { from: { x: draft.x1, y: draft.y1 }, free: e.shiftKey }); draft.x2 = s.x; draft.y2 = s.y; snapInfo = s; draw(); return; }
       if (draft.kind === 'box') { const s = snap(wx, wy, { noObjects: true }); draft.x2 = s.x; draft.y2 = s.y; draw(); return; }
@@ -1392,8 +1471,10 @@
     draw();
   });
   cv.addEventListener('pointerup', (e) => {
+    if (e.button === 0 && !(cmd && cmd.step)) rh.dist = rh.ang = null;   // a typed distance / angle lasts for one point
     if (drag) {
-      if (drag.kind === 'marquee') {
+      if (drag.kind === 'marquee' && drag.rhino) rhMarquee(drag);
+      else if (drag.kind === 'marquee') {
         const x0 = Math.min(drag.wx, drag.x2), x1 = Math.max(drag.wx, drag.x2), y0 = Math.min(drag.wy, drag.y2), y1 = Math.max(drag.wy, drag.y2);
         const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
         sel = [];
@@ -1411,7 +1492,7 @@
         if (d && drag.good) Object.assign(d, drag.good);
         drag = null; changed(); flash('Moved back to the last position where the driver fits.'); return;
       }
-      else if (drag.kind === 'pan' && drag.button === 2 && drag.click) { const [sx, sy] = pt(e); drag = null; openJointMenu(sx, sy); return; }
+      else if (drag.kind === 'pan' && drag.button === 2 && drag.click) { const [sx, sy] = pt(e); drag = null; if (RH()) rhRightClick(sx, sy); else openJointMenu(sx, sy); return; }
       else if (drag.kind === 'driver' || drag.kind === 'move' || drag.kind === 'pend' || drag.kind === 'vert' || drag.kind === 'bend' || drag.kind === 'perp') { if (drag.kind === 'vert' && design.autoCenter) { /* keep manual position */ } changed(); }
       drag = null; snapInfo = null; draw(); return;
     }
@@ -1423,15 +1504,18 @@
     if (draft && draft.kind === 'box') {
       const x0 = Math.min(draft.x1, draft.x2), x1 = Math.max(draft.x1, draft.x2), y0 = Math.min(draft.y1, draft.y2), y1 = Math.max(draft.y1, draft.y2);
       draft = null;
-      if (x1 - x0 > 3 * design.t && y1 - y0 > 3 * design.t) {
-        commit(); const t = design.t, h = t / 2;
-        const add = (a, b, c, d) => design.panels.push({ id: nid(), x1: a, y1: b, x2: c, y2: d });
-        add(x0, y0 + h, x1, y0 + h); add(x0, y1 - h, x1, y1 - h); add(x0 + h, y0 + t, x0 + h, y1 - t); add(x1 - h, y0 + t, x1 - h, y1 - t);
-        changed();
-      }
+      addBoxShell(x0, y0, x1, y1);
       draw();
     }
   });
+  /** four boards inside the outline x0..x1, y0..y1 (the box tool and the Rectangle command); false if it is too small */
+  function addBoxShell(x0, y0, x1, y1) {
+    if (!(x1 - x0 > 3 * design.t && y1 - y0 > 3 * design.t)) return false;
+    commit(); const t = design.t, h = t / 2;
+    const add = (a, b, c, d) => design.panels.push({ id: nid(), x1: a, y1: b, x2: c, y2: d });
+    add(x0, y0 + h, x1, y0 + h); add(x0, y1 - h, x1, y1 - h); add(x0 + h, y0 + t, x0 + h, y1 - t); add(x1 - h, y0 + t, x1 - h, y1 - t);
+    changed(); return true;
+  }
   cv.addEventListener('dblclick', (e) => {
     const [sx, sy] = pt(e), [wx, wy] = s2w(sx, sy);
     if (tool === 'path' && draft) { finishPath(); return; }
@@ -1444,7 +1528,7 @@
     e.preventDefault();
     const [sx, sy] = pt(e), [wx, wy] = s2w(sx, sy);
     const f = Math.exp(-e.deltaY * 0.0015);
-    view.k = clamp(view.k * f, 0.03, 20);
+    view.k = clamp(view.k * f, 0.03, 20); view.auto = false;
     view.tx = sx - MX() * wx * view.k; view.ty = sy + wy * view.k;
     draw();
   }, { passive: false });
@@ -1542,8 +1626,8 @@
     const opts = [['front', 'Front mount · flange on the face the cone fires from', !rear], ['rear', 'Rear mount · fitted from inside, fires through the cutout', rear], ['flip', 'Basket to the other side of the board (F)', false]];
     ctxEl = document.createElement('div'); ctxEl.className = 'ctxmenu'; ctxEl.setAttribute('role', 'menu');
     ctxEl.innerHTML = `<div class="ctxhead">Driver · ${esc(spec.m || 'driver')}</div>` + opts.map(([v, t, on]) => `<button role="menuitemradio" aria-checked="${on}" data-v="${v}">${v === 'flip' ? '⇅ ' : on ? '● ' : '○ '}${esc(t)}</button>`).join('');
-    $('board').appendChild(ctxEl);
-    const bw = $('board').clientWidth, bh = $('board').clientHeight;
+    $('vp2d').appendChild(ctxEl);
+    const bw = $('vp2d').clientWidth, bh = $('vp2d').clientHeight;
     ctxEl.style.left = Math.min(sx + 6, bw - ctxEl.offsetWidth - 8) + 'px'; ctxEl.style.top = Math.min(sy + 6, bh - ctxEl.offsetHeight - 8) + 'px';
     ctxEl.querySelectorAll('button').forEach((b) => b.onclick = () => {
       closeCtx();
@@ -1555,9 +1639,10 @@
       setMount(d, b.dataset.v);
     });
   }
-  function openJointMenu(sx, sy) {
+  /** Right-click menu for the corner (or driver) at the pointer. Returns false when there is neither; quiet = say nothing then. */
+  function openJointMenu(sx, sy, quiet) {
     closeCtx();
-    { const [wx, wy] = s2w(sx, sy), h = hit(wx, wy); if (h && h.t === 'driver') { const d = design.drivers.find((q) => q.id === h.id); if (d) { sel = [{ t: 'driver', id: d.id }]; refreshSide(); openDriverMenu(d, sx, sy); return; } } }
+    { const [wx, wy] = s2w(sx, sy), h = hit(wx, wy); if (h && h.t === 'driver') { const d = design.drivers.find((q) => q.id === h.id); if (d) { sel = [{ t: 'driver', id: d.id }]; refreshSide(); openDriverMenu(d, sx, sy); return true; } } }
     const joints = (A && A.joints) || [];
     let best = null;
     const [wx0, wy0] = s2w(sx, sy);
@@ -1565,7 +1650,7 @@
       const [x, y] = w2s(j.x, j.y), d = hyp(x - sx, y - sy), dw = hyp(j.x - wx0, j.y - wy0);
       if ((d < 22 || dw < 1.5 * design.t) && (!best || d < best.d)) best = { j, d };
     }
-    if (!best) { flash('Right-click on a corner where two boards meet to choose how they join.'); return; }
+    if (!best) { if (!quiet) flash('Right-click on a corner where two boards meet to choose how they join.'); return false; }
     const j = best.j, names = partNames();
     const na = names.get(j.a.id) || 'Board', nb = names.get(j.b.id) || 'Board';
     const autoWho = j.tee ? nb : j.type === 'auto' ? names.get(+j.resolved.split(':')[1]) : null;
@@ -1589,8 +1674,8 @@
     ];
     ctxEl = document.createElement('div'); ctxEl.className = 'ctxmenu'; ctxEl.setAttribute('role', 'menu');
     ctxEl.innerHTML = `<div class="ctxhead">Joint · ${esc(na)} + ${esc(nb)}</div>` + opts.map(([v, t]) => `<button role="menuitemradio" aria-checked="${j.type === v}" data-v="${esc(v)}">${j.type === v ? '● ' : '○ '}${esc(t)}</button>`).join('');
-    $('board').appendChild(ctxEl);
-    const bw = $('board').clientWidth, bh = $('board').clientHeight;
+    $('vp2d').appendChild(ctxEl);
+    const bw = $('vp2d').clientWidth, bh = $('vp2d').clientHeight;
     ctxEl.style.left = Math.min(sx + 6, bw - ctxEl.offsetWidth - 8) + 'px'; ctxEl.style.top = Math.min(sy + 6, bh - ctxEl.offsetHeight - 8) + 'px';
     ctxEl.querySelectorAll('button').forEach((b) => b.onclick = () => {
       commit(); design.joints = design.joints || {};
@@ -1598,6 +1683,7 @@
       closeCtx(); changed();
     });
     jointHi = j; draw();
+    return true;
   }
   let jointHi = null;
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtx(); });
@@ -1704,6 +1790,7 @@
   // ---------------------------------------------------------------- keyboard
   window.addEventListener('keydown', (e) => {
     if (/input|select|textarea/i.test(document.activeElement.tagName)) return;
+    if (RH() && rhKey(e)) return;   // Rhino mode: letters and numbers go to the command line, Enter / Space repeat, F8 / F9 toggle
     const k = e.key;
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
@@ -1781,7 +1868,7 @@
   function changed() { sliding = false; syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
   function liveChanged() { if (liveRaf) return; liveRaf = requestAnimationFrame(() => { liveRaf = 0; syncArcsIn(design); syncDrivers(); if (design.autoPaths && performance.now() - lastAuto > 180 && !(drag && drag.kind === 'vert')) regenAutoPaths(); analyse(); draw(); }); }
   let flashTimer = null;
-  function flash(msg) { const h = $('hint'); h.textContent = msg; h.style.color = 'var(--accent)'; clearTimeout(flashTimer); flashTimer = setTimeout(() => { h.style.color = ''; h.textContent = HINTS[tool]; }, 2600); }
+  function flash(msg) { const h = $('hint'); h.textContent = msg; h.style.color = 'var(--accent)'; clearTimeout(flashTimer); flashTimer = setTimeout(() => { h.style.color = ''; h.textContent = hintOf(tool); }, 2600); }
 
   // ---------------------------------------------------------------- drawing the board
   let regionImg = null;
@@ -1886,7 +1973,8 @@
     for (const s0 of sel) if (s0.t === 'arc') { const g = (design.arcs || []).find((q) => q.id === s0.id); if (g) drawArcSel(g); }
     // draft
     if (draft) drawDraft();
-    if (snapInfo && (tool === 'panel' || tool === 'boundary' || drag)) {
+    if (cmd && cmd.step) drawCmdPreview();
+    if (snapInfo && (tool === 'panel' || tool === 'boundary' || drag || (cmd && cmd.step))) {
       const [x, y] = w2s(snapInfo.x, snapInfo.y); ctx.strokeStyle = C.accent; ctx.lineWidth = 1.5;
       if (snapInfo.kind === 'corner' || snapInfo.kind === 'end') ctx.strokeRect(x - 5, y - 5, 10, 10);
       else if (snapInfo.kind === 'face' || snapInfo.kind === 'mid') { ctx.beginPath(); ctx.moveTo(x - 6, y + 5); ctx.lineTo(x, y - 6); ctx.lineTo(x + 6, y + 5); ctx.closePath(); ctx.stroke(); }
@@ -1907,7 +1995,7 @@
       }
     }
     // end handles: the grabbed end, plus rings on every end joined to it (they move together unless Shift is held)
-    const endHint = drag && (drag.kind === 'pend' || drag.kind === 'bend') ? { t: drag.kind, id: drag.id, end: drag.end, joints: drag.joints, loose: drag.loose } : (hz && (hz.t === 'pend' || hz.t === 'bend') ? { ...hz, joints: jointEnds(hz.t, hz.id, hz.end), loose: !!(window.event && window.event.shiftKey) } : null);
+    const endHint = drag && (drag.kind === 'pend' || drag.kind === 'bend') ? { t: drag.kind, id: drag.id, end: drag.end, joints: drag.joints, loose: drag.loose } : (hz && (hz.t === 'pend' || hz.t === 'bend') ? { ...hz, joints: jointEnds(hz.t, hz.id, hz.end), loose: RH() ? mods.alt : !!(window.event && window.event.shiftKey) } : null);
     if (endHint) {
       const p = (endHint.t === 'pend' ? design.panels : design.boundaries).find((q) => q.id === endHint.id);
       if (p) {
@@ -1919,14 +2007,19 @@
           ctx.strokeStyle = endHint.loose ? C.muted : C.accent; ctx.lineWidth = 1.5; ctx.setLineDash(endHint.loose ? [2, 2] : []);
           ctx.beginPath(); ctx.arc(jx, jy, 9, 0, 7); ctx.stroke(); ctx.setLineDash([]);
         }
-        if (drag && endHint.joints && endHint.joints.length) tag(endHint.loose ? 'Shift: this end only' : `moving ${endHint.joints.length + 1} joined ends`, x + 12, y - 16, endHint.loose ? C.muted : C.accent);
+        if (drag && endHint.joints && endHint.joints.length) tag(endHint.loose ? `${RH() ? 'Alt' : 'Shift'}: this end only` : `moving ${endHint.joints.length + 1} joined ends`, x + 12, y - 16, endHint.loose ? C.muted : C.accent);
       }
     }
     if (ctxEl && jointHi) { const [x, y] = w2s(jointHi.x, jointHi.y); ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.setLineDash([3, 2]); ctx.beginPath(); ctx.arc(x, y, 12, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
-    if (drag && drag.kind === 'marquee') { const [a, b] = w2s(drag.wx, drag.wy), [c, d] = w2s(drag.x2, drag.y2); ctx.setLineDash([4, 3]); ctx.strokeStyle = C.accent; ctx.strokeRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)); ctx.setLineDash([]); }
+    if (drag && drag.kind === 'marquee') {
+      const [a, b] = w2s(drag.wx, drag.wy), [c, d] = w2s(drag.x2, drag.y2), crossing = !drag.rhino || c < a;   // Rhino: a window box is drawn solid, a crossing box dashed
+      if (drag.rhino) { ctx.fillStyle = rgba(C.accent, crossing ? 0.1 : 0.05); ctx.fillRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)); }
+      ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeStyle = C.accent; ctx.lineWidth = 1; ctx.strokeRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)); ctx.setLineDash([]);
+    }
     drawOverallDims();
     drawScale();
     renderStatus();
+    sync3d(); rhStatus();
   }
   function drawGrid() {
     const W = view.w, H = view.h;
@@ -2901,7 +2994,8 @@
       <label class="row note"><input type="checkbox" id="dsAutoPath"> Find air paths automatically from the boards (mouths and vents)</label>
       <label class="row note"><input type="checkbox" id="dsAuto"> Centre hand-drawn paths in their channel</label>
       <div class="note">Responses are at 1 W into Re (${(+design.eg).toFixed(2)} V); use the Power slider on the SPL tab for louder drive. Model: plane-wave horn segments, lumped chambers, piston radiation, power-response SPL — the same model as Hornresp (validated against your 15BG100 horn exports to 0.00 dB).</div>
-      <div class="note"><b>Keys</b> <span class="kbd">V</span> select <span class="kbd">P</span> board <span class="kbd">R</span> box <span class="kbd">A</span> air path <span class="kbd">D</span> driver <span class="kbd">B</span> divider <span class="kbd">X</span> board face <span class="kbd">F</span> flip driver <span class="kbd">0</span> fit <span class="kbd">Ctrl Z</span> undo · right-drag or Space-drag pans · wheel zooms</div>`;
+      ${RH() ? `<div class="note"><b>Commands</b> (type, then Enter or Space) <span class="kbd">M</span> move <span class="kbd">Co</span> copy <span class="kbd">Ro</span> rotate <span class="kbd">Mi</span> mirror <span class="kbd">L</span> board <span class="kbd">PL</span> boards end to end <span class="kbd">Rec</span> box <span class="kbd">ZS</span> zoom selected <span class="kbd">ZE</span> zoom extents <span class="kbd">U</span> undo <span class="kbd">Di</span> distance · <span class="kbd">F8</span> ortho <span class="kbd">F9</span> grid snap · right-drag pans the drawing and rotates the 3-D view · Enter repeats the last command</div>`
+    : `<div class="note"><b>Keys</b> <span class="kbd">V</span> select <span class="kbd">P</span> board <span class="kbd">R</span> box <span class="kbd">A</span> air path <span class="kbd">D</span> driver <span class="kbd">B</span> divider <span class="kbd">X</span> board face <span class="kbd">F</span> flip driver <span class="kbd">0</span> fit <span class="kbd">Ctrl Z</span> undo · right-drag or Space-drag pans · wheel zooms</div>`}`;
     el.innerHTML = h;
     pl.wire(el);
     $('showLbl').checked = !!design.labelsAlways; $('showLbl').onchange = (e) => { design.labelsAlways = e.target.checked; draw(); };
@@ -3248,7 +3342,7 @@
 
   function loadDesign(d) {
     if (!d || !Array.isArray(d.panels)) throw new Error('bad');
-    commit(); design = Object.assign(baseDesign('Untitled'), d); if (!SNAPS[design.snap]) design.snap = design.units === 'in' ? 'in01' : 'mm'; sel = []; fit(); changed(); setPickerText(); renderSnap(); renderViewSide();
+    commit(); design = Object.assign(baseDesign('Untitled'), d); if (!SNAPS[design.snap]) design.snap = design.units === 'in' ? 'in01' : 'mm'; sel = []; refit3d(); fit(); changed(); setPickerText(); renderSnap(); renderViewSide();
   }
   function toDXF() {
     const out = ['0', 'SECTION', '2', 'ENTITIES'];
@@ -3306,7 +3400,7 @@
   const SIDE_DEFAULT = 440;
   function setSideWidth(px, save) {
     const total = mainEl.getBoundingClientRect().width;
-    const w = Math.round(clamp(px, 300, Math.max(320, total - 46 - 8 - 280)));
+    const w = Math.round(clamp(px, 300, Math.max(320, total - 46 - 8 - 420)));   // the drawing + 3-D view keep at least 420 px
     mainEl.style.setProperty('--side-w', w + 'px');
     if (splitter) splitter.setAttribute('aria-valuenow', String(w));
     if (save) LS.set('shl.sideW', String(w));
@@ -3333,15 +3427,21 @@
     window.addEventListener('resize', () => setSideWidth(parseFloat(getComputedStyle(mainEl).getPropertyValue('--side-w')) || SIDE_DEFAULT, false));
   }
 
+  function setMirror(want) {
+    if (!!design.mirror === !!want) return;
+    const cx = view.w / 2, [wx] = s2w(cx, 0);      // keep the same spot in the middle of the screen
+    design.mirror = !!want; view.tx = cx - MX() * wx * view.k;
+    regionImg = null; renderViewSide(); draw(); LS.set('shl.design', JSON.stringify(design));
+  }
   function renderViewSide() {
     const el = $('viewSeg'); if (!el) return;
-    el.innerHTML = [['left', 'Left'], ['right', 'Right']].map(([k, v]) => `<button class="${(design.mirror ? 'right' : 'left') === k ? 'on' : ''}" data-side="${k}" title="Look at the cabinet from its ${v.toLowerCase()} side">${v}</button>`).join('');
-    el.querySelectorAll('button').forEach((b) => b.onclick = () => {
-      const want = b.dataset.side === 'right'; if (!!design.mirror === want) return;
-      const cx = view.w / 2, [wx] = s2w(cx, 0);      // keep the same spot in the middle of the screen
-      design.mirror = want; view.tx = cx - MX() * wx * view.k;
-      regionImg = null; renderViewSide(); draw(); LS.set('shl.design', JSON.stringify(design));
-    });
+    // Classic names the cabinet's own side; Rhino names the view by where the viewer stands, so the same drawing
+    // (mouth on the left) is the cabinet's left side and Rhino's Right view.
+    const opts = RH() ? [['left', 'Right', "Rhino's Right view (the cabinet's mouth is on the left)"], ['right', 'Left', "Rhino's Left view"]]
+      : [['left', 'Left', 'Look at the cabinet from its left side'], ['right', 'Right', 'Look at the cabinet from its right side']];
+    el.innerHTML = opts.map(([k, v, tip]) => `<button class="${(design.mirror ? 'right' : 'left') === k ? 'on' : ''}" data-side="${k}" title="${tip}">${v}</button>`).join('');
+    el.querySelectorAll('button').forEach((b) => b.onclick = () => setMirror(b.dataset.side === 'right'));
+    markVps();
   }
   function renderSnap() {
     const el = $('snapSeg');
@@ -3349,8 +3449,561 @@
     el.querySelectorAll('button').forEach((b) => b.onclick = () => { design.snap = b.dataset.snap; renderSnap(); draw(); refreshSide(); LS.set('shl.design', JSON.stringify(design)); });
   }
 
+  // ================================================================ viewports and the 3-D view
+  // The side-view drawing is one viewport; Top, Perspective and Front are WebGL views of the same boards extruded across
+  // the cabinet width (window.Horn3D). Layouts: '2d' drawing only, '3d' one 3-D view, 'split' drawing + Perspective,
+  // 'four' Rhino's 4View (Top | Perspective over Front | drawing).
+  const VPS = [{ id: 'top', el: $('vpTop'), view: 'Top' }, { id: 'persp', el: $('vpPersp'), view: 'Perspective' }, { id: 'front', el: $('vpFront'), view: 'Front' }];
+  VPS.forEach((v) => { v.canvas = v.el.querySelector('canvas'); v.title = v.el.querySelector('.vptitle'); v.v3 = null; v.fresh = true; v.stale = true; v.failed = false; });
+  let activeVp = '2d', defLayout = '2d';   // defLayout: drawing + Perspective when there is room for both (set at start-up)
+  function layoutNow() { return UI.layout || defLayout; }
+  function shownVps() { const l = layoutNow(); return l === '2d' ? ['2d'] : l === '3d' ? [UI.max3d || 'persp'] : l === 'split' ? ['2d', 'persp'] : ['top', 'persp', 'front', '2d']; }
+  function setLayout(l) { UI.layout = l; saveUI(); applyLayout(); }
+  function applyLayout() {
+    const l = layoutNow(), shown = shownVps(), vps = $('vps');
+    vps.dataset.layout = l;
+    if (l === 'split' && $('board').clientWidth < 640) vps.dataset.stack = '1'; else delete vps.dataset.stack;
+    $('vp2d').classList.toggle('show', shown.includes('2d'));
+    for (const v of VPS) v.el.classList.toggle('show', shown.includes(v.id));
+    if (!shown.includes(activeVp)) activeVp = shown[0];
+    refit3d();   // the viewports change shape, so each 3-D view re-frames the model (keeping its direction)
+    markVps(); renderTools();
+    requestAnimationFrame(() => { resize(); if (shown.includes('2d') && fitOk()) { fit(); fitted = true; draw(); } sync3d(true); });
+  }
+  /** Rhino: double-click a viewport title to maximise it, again to go back */
+  function toggleMax(id) {
+    const l = layoutNow();
+    if (l === '2d' || l === '3d') { setLayout(UI.prev && UI.prev !== l ? UI.prev : 'split'); return; }
+    UI.prev = l; if (id !== '2d') UI.max3d = id;
+    setLayout(id === '2d' ? '2d' : '3d');
+  }
+  function markVps() {
+    if (!design) return;
+    const many = shownVps().length > 1;
+    $('vp2d').classList.toggle('on', many && activeVp === '2d');
+    $('vpTitle2d').textContent = (RH() ? (design.mirror ? 'Left' : 'Right') : 'Side view') + ' ▾';
+    for (const v of VPS) { v.el.classList.toggle('on', many && activeVp === v.id); v.title.textContent = (v.v3 ? v.v3.cam.name : v.view) + ' ▾'; }
+  }
+  function setActiveVp(id) { if (activeVp === id) return; activeVp = id; markVps(); }
+  function ensure3d(v) {
+    if (v.v3 || v.failed) return v.v3;
+    try { v.v3 = window.Horn3D ? window.Horn3D.create(v.canvas) : null; } catch (e) { console.error(e); v.v3 = null; }
+    if (!v.v3) { v.failed = true; const m = document.createElement('div'); m.className = 'vpmsg'; m.textContent = 'The 3-D view needs WebGL, which is switched off or unavailable in this browser.'; v.el.appendChild(m); return null; }
+    v.v3.setView(v.view); attach3d(v);
+    return v.v3;
+  }
+  const col01 = (hex) => rgbArr(hex).map((q) => q / 255);
+  /** every board, the two side panels and the drivers as meshes for the 3-D views */
+  function scene3d() {
+    const H3 = window.Horn3D, W = design.W, t = design.t, objs = [];
+    const wood = col01(design.material === 'mdf' ? C.mdf : C.birch), edge = col01(design.material === 'mdf' ? C['mdf-edge'] : C['birch-edge']);
+    const dark = rgbArr(C.bg).reduce((a, q) => a + q, 0) < 380;
+    const drvBody = dark ? [0.46, 0.47, 0.5] : [0.3, 0.31, 0.33], drvCone = dark ? [0.2, 0.2, 0.22] : [0.13, 0.13, 0.14], drvEdge = dark ? [0.8, 0.82, 0.85] : [0.08, 0.08, 0.09];
+    try { HG.computeJoints(design); } catch (e) { }
+    // d.n drivers sit side by side across the width when they fit, otherwise one is drawn in the middle
+    const across = (d) => { const n = Math.max(1, Math.round(d.n || 1)), m = n * driverDims(d.key).outer <= W + 0.5 ? n : 1; return Array.from({ length: m }, (_, i) => W * (i + 0.5) / m); };
+    const holes = new Map();
+    for (const d of design.drivers) {
+      if (!d.mount) continue;
+      const r = driverDims(d.key).cutout / 2;
+      for (const cx of across(d)) { if (!holes.has(d.mount.pid)) holes.set(d.mount.pid, []); holes.get(d.mount.pid).push({ x: d.x, y: d.y, cx, r }); }
+    }
+    const pts = [];
+    for (const p of design.panels) {
+      const q = HG.panelQuad(p, t).map((v) => [v.x, v.y]); pts.push(...q);
+      objs.push({ key: p.arc ? 'arc:' + p.arc : 'panel:' + p.id, mesh: H3.board(q, 0, W, holes.get(p.id)), color: wood, edge, sel: p.arc ? isSel('arc', p.arc) : isSel('panel', p.id) });
+    }
+    if (pts.length >= 3 && UI.sides !== 'hide') {   // side panels: the outline around all the boards
+      const hl = H3.hull(pts);
+      if (hl.length >= 3) for (const [k, x0, x1] of [['side:a', -t, 0], ['side:b', W, W + t]]) objs.push({ key: k, mesh: H3.prism(hl, x0, x1), color: wood, edge, alpha: UI.sides === 'ghost' ? 0.13 : 1, nopick: true });
+    }
+    for (const d of design.drivers) {
+      const loc = driverLocal(d), body = new H3.Mesh(), cone = new H3.Mesh(), c = [d.x, d.y], n = [d.nx, d.ny];
+      const cz0 = loc.cone[0][1], cz1 = loc.cone[2][1], r0 = loc.cone[1][0], r1 = loc.cone[2][0], rin = loc.dm.cutout / 2;
+      for (const cx of across(d)) {
+        if (loc.outline) { const pr = loc.outline.slice(0, loc.outline.length / 2); body.add(H3.revolve(pr.concat([[0, pr[pr.length - 1][1]]]), c, n, cx)); }
+        else {
+          const f0 = loc.flange[0][1], f1 = loc.flange[2][1];
+          body.add(H3.revolve([[rin, f0], [loc.R, f0], [loc.R, f1], [rin, f1]], c, n, cx));
+          body.add(H3.revolve([[rin, loc.basket[0][1]], [loc.basket[2][0], loc.basket[2][1]]], c, n, cx));
+          body.add(H3.revolve([[0, loc.magnet[0][1]], [loc.rm, loc.magnet[0][1]], [loc.rm, loc.magnet[2][1]], [0, loc.magnet[2][1]]], c, n, cx));
+        }
+        if (rin > r0) body.add(H3.revolve([[rin, cz0], [r0, cz0]], c, n, cx));                              // surround
+        cone.add(H3.revolve([[r0, cz0], [r1, cz1], [0, cz1 + (cz0 - cz1) * 0.25]], c, n, cx));             // cone + dust cap
+      }
+      const s = isSel('driver', d.id);
+      objs.push({ key: 'driver:' + d.id, mesh: body, color: drvBody, edge: drvEdge, sel: s });
+      objs.push({ key: 'driver:' + d.id, mesh: cone, color: drvCone, edge: drvEdge, sel: s });
+    }
+    return objs;
+  }
+  let sig3 = '', raf3 = 0;
+  /** redraw the visible 3-D views when the boards, drivers, selection or display settings changed (force = always) */
+  function sync3d(force) {
+    if (!design || layoutNow() === '2d') return;
+    if (force) sig3 = '';
+    if (raf3) return;
+    raf3 = requestAnimationFrame(() => { raf3 = 0; sync3dNow(); });
+  }
+  function sync3dNow() {
+    const shown = shownVps().filter((id) => id !== '2d'); if (!design || !shown.length) return;
+    const sig = JSON.stringify([design.panels, design.drivers, design.drivers.map((d) => { const m = driverDims(d.key); return [m.outer, m.depth, m.cutout]; }), design.W, design.t, design.material, sel, UI.mode3d, UI.sides, C.bg, C.accent, unit()]);
+    const dirty = sig !== sig3; sig3 = sig;
+    if (dirty) VPS.forEach((v) => { v.stale = true; });
+    let objs = null;
+    for (const v of VPS) {
+      if (!shown.includes(v.id)) continue;
+      const g = ensure3d(v); if (!g) continue;
+      if (v.stale) { objs = objs || scene3d(); g.mode = UI.mode3d; g.setScene(objs, { bg: col01(C.bg), grid: col01(C.grid2), sel: col01(C.accent), gridStep: isIn() ? 152.4 : 100 }); v.stale = false; }
+      if (v.fresh) { g.fit(); v.fresh = false; }
+      g.render();
+    }
+  }
+  const refit3d = () => VPS.forEach((v) => { v.fresh = true; });
+  function pick3d(key, q) {
+    const picking = RH() && !!(cmd && cmd.step && cmd.step.select);
+    if (!key) { if (!q.add && !q.sub && !picking && sel.length) { sel = []; refreshSide(); draw(); } return; }
+    const [t, id] = key.split(':'), it = { t, id: +id };
+    if (q.sub) sel = sel.filter((s) => !(s.t === it.t && s.id === it.id));
+    else if (q.add || picking) { if (!isSel(it.t, it.id)) sel = [...sel, it]; }
+    else sel = [it];
+    refreshSide(); draw();
+  }
+  /** Mouse in a 3-D view. Rhino: right-drag rotates a perspective view and pans a parallel one, Shift + right-drag pans,
+   *  Ctrl + right-drag zooms, Ctrl + Shift + right-drag rotates, the wheel zooms, a click selects (Shift adds, Ctrl
+   *  removes). Classic also rotates with a left-drag. */
+  function attach3d(v) {
+    const c = v.canvas, g = v.v3; let d = null;
+    const at = (e) => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    c.addEventListener('contextmenu', (e) => e.preventDefault());
+    c.addEventListener('pointerdown', (e) => {
+      try { c.setPointerCapture(e.pointerId); } catch (err) { }
+      closeCtx(); setActiveVp(v.id);
+      const [x, y] = at(e), ctrl = e.ctrlKey || e.metaKey;
+      let mode = 'pick';
+      if (e.button === 1) mode = 'pan';
+      else if (e.button === 2 || !RH()) mode = e.shiftKey && ctrl ? 'orbit' : e.shiftKey ? 'pan' : ctrl ? 'zoom' : (g.cam.ortho && e.button === 2) ? 'pan' : 'orbit';
+      d = { x, y, x0: x, y0: y, mode, button: e.button, moved: false, add: e.shiftKey, sub: ctrl };
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!d) return;
+      const [x, y] = at(e);
+      if (!d.moved && hyp(x - d.x0, y - d.y0) < 4) return;
+      const dx = x - d.x, dy = y - d.y; d.x = x; d.y = y; d.moved = true;
+      if (d.mode === 'orbit') g.orbit(dx, dy); else if (d.mode === 'pan') g.pan(dx, dy); else if (d.mode === 'zoom') g.zoom(Math.exp(dy * 0.006), d.x0, d.y0); else return;
+      g.render();
+    });
+    c.addEventListener('pointerup', () => {
+      if (!d) return;
+      const q = d; d = null;
+      if (q.moved) return;
+      if (q.button === 0) pick3d(g.pick(q.x0, q.y0), q);
+      else if (q.button === 2 && RH()) rhRightClick();
+    });
+    c.addEventListener('pointercancel', () => { d = null; });
+    c.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = at(e); g.zoom(Math.exp(e.deltaY * 0.0015), x, y); g.render(); }, { passive: false });
+  }
+  function setMode3d(m) { UI.mode3d = m; saveUI(); sync3d(true); }
+  function setSides(s) { UI.sides = s; saveUI(); sync3d(true); }
+  /** set the active viewport's view the way Rhino's Top / Front / Right / Perspective commands do */
+  function setViewCmd(name) {
+    if (activeVp === '2d') {
+      if (name === 'Right' || name === 'Left') setMirror(name === 'Left');
+      else echo(`The drawing is always a side view (Right or Left). Click a 3-D viewport first, then ${name}.`);
+      return;
+    }
+    const v = VPS.find((q) => q.id === activeVp);
+    if (v && v.v3) { v.v3.setView(name); v.v3.render(); markVps(); }
+  }
+  function popMenu(host, items) {
+    closeCtx();
+    ctxEl = document.createElement('div'); ctxEl.className = 'ctxmenu'; ctxEl.setAttribute('role', 'menu');
+    ctxEl.innerHTML = items.map((it, i) => (it.head ? `<div class="ctxhead">${esc(it.head)}</div>` : `<button role="menuitem" data-i="${i}">${it.on == null ? '' : it.on ? '● ' : '○ '}${esc(it.label)}</button>`)).join('');
+    ctxEl.style.left = '6px'; ctxEl.style.top = '30px'; ctxEl.style.maxHeight = Math.max(120, host.clientHeight - 40) + 'px'; ctxEl.style.overflowY = 'auto';
+    host.appendChild(ctxEl);
+    ctxEl.querySelectorAll('button').forEach((b) => b.onclick = () => { const it = items[+b.dataset.i]; closeCtx(); it.run(); });
+  }
+  function vpMenu(id) {
+    setActiveVp(id);
+    const l = layoutNow(), single = l === '2d' || l === '3d';
+    const lay = [{ head: 'Layout' }, { label: single ? 'Restore the other viewports' : 'Maximise this viewport', run: () => toggleMax(id) },
+      { label: 'Drawing + Perspective', on: l === 'split', run: () => setLayout('split') }, { label: '4 viewports (4View)', on: l === 'four', run: () => setLayout('four') },
+      { label: 'Drawing only', on: l === '2d', run: () => setLayout('2d') }, { label: 'Zoom extents (ZE)', run: () => zoomExtents(false) }];
+    if (id === '2d') {
+      popMenu($('vp2d'), [{ head: 'View' }, { label: RH() ? 'Right' : "Cabinet's left side", on: !design.mirror, run: () => setMirror(false) }, { label: RH() ? 'Left' : "Cabinet's right side", on: !!design.mirror, run: () => setMirror(true) }, ...lay]);
+      return;
+    }
+    const v = VPS.find((q) => q.id === id), name = v.v3 ? v.v3.cam.name : v.view;
+    popMenu(v.el, [{ head: 'Display' }, ...[['wireframe', 'Wireframe'], ['shaded', 'Shaded'], ['ghosted', 'Ghosted']].map(([k, lb]) => ({ label: lb, on: UI.mode3d === k, run: () => setMode3d(k) })),
+      { head: 'Side panels' }, ...[['show', 'Solid'], ['ghost', 'See-through'], ['hide', 'Hidden']].map(([k, lb]) => ({ label: lb, on: UI.sides === k, run: () => setSides(k) })),
+      { head: 'View' }, ...['Perspective', 'Top', 'Front', 'Right', 'Left', 'Back'].map((n) => ({ label: n, on: name === n, run: () => { setActiveVp(id); setViewCmd(n); } })), ...lay]);
+  }
+  function initVps() {
+    $('vpTitle2d').onclick = () => vpMenu('2d'); $('vpTitle2d').ondblclick = () => { closeCtx(); toggleMax('2d'); };
+    for (const v of VPS) {
+      v.title.onclick = () => vpMenu(v.id); v.title.ondblclick = () => { closeCtx(); toggleMax(v.id); };
+      new ResizeObserver(() => { if (!v.v3 || !v.el.classList.contains('show')) return; if (v.v3.cam.auto) v.v3.fit(); v.v3.render(); }).observe(v.el);   // still framed as fitted: keep it framed
+    }
+    new ResizeObserver(() => { const vps = $('vps'), want = layoutNow() === 'split' && $('board').clientWidth < 640; if (want !== !!vps.dataset.stack) { if (want) vps.dataset.stack = '1'; else delete vps.dataset.stack; } }).observe($('board'));
+  }
+
+  // ================================================================ Rhino-style command line
+  // Type a command name or alias (M, Co, Ro, Mi, L, ZS, ZE ...) and press Enter or Space. While a command asks for a
+  // point: click, or type x,y (absolute), r x,y or @x,y (relative), d<a (polar), a distance, or <angle. Enter, Space
+  // and a right-click repeat the last command; Esc cancels. Grid Snap / Ortho / Osnap are on the status bar.
+  const cmdIn = $('cmdIn'), hist = [], CMD = {}, ALIAS = {};
+  let lastPt = null, acItems = [], acHi = 0;
+  function def(name, aliases, help, run, o) { CMD[name] = Object.assign({ name, aliases, help, run }, o || {}); for (const a of aliases) ALIAS[a] = name; }
+  function echo(t) { hist.push(t); if (hist.length > 60) hist.shift(); const el = $('cmdHist'); if (el) el.innerHTML = hist.slice(-2).map((l) => `<div>${esc(l)}</div>`).join(''); }
+  function showPrompt() {
+    const st = cmd && cmd.step, el = $('cmdPrompt');
+    if (el) el.textContent = st ? (typeof st.prompt === 'function' ? st.prompt() : st.prompt) + ':' : 'Command:';
+    markTool();
+  }
+  const cmdWantsPoint = () => !!(cmd && cmd.step && cmd.step.onPoint && !cmd.step.select);
+  /** next prompt of the running command. o.from = anchor for Ortho and typed distances, o.rel = base for relative
+   *  coordinates, o.live(cur) / o.preview(cur) = feedback while the pointer moves, o.onNumber, o.opts = { Name: fn }. */
+  function ask(prompt, onPoint, o = {}) {
+    cmd.step = { prompt, onPoint, from: o.from || null, rel: o.rel || o.from || null, live: o.live || null, preview: o.preview || null, onNumber: o.onNumber || null, opts: o.opts || null, onEnter: o.onEnter || null, select: !!o.select, snapOpt: o.snapOpt || null };
+    cmd.cur = null; rh.dist = rh.ang = null; showPrompt(); draw();
+  }
+  function endCmd(msg) { cmd = null; rh.dist = rh.ang = null; draft = null; snapInfo = null; showPrompt(); if (msg) echo(msg); draw(); }
+  function cmdCancel(quiet) { if (!cmd) return false; endCmd(quiet ? null : 'Cancelled.'); return true; }
+  function runCmd(name) {
+    const c = CMD[name]; if (!c) return;
+    echo('Command: ' + name);
+    if (c.transparent) { c.run({ flags: {} }); return; }   // zooms, views and toggles run inside another command, as in Rhino
+    if (cmd) endCmd();
+    if (tool !== 'select') { tool = 'select'; draft = null; renderTools(); $('hint').textContent = hintOf('select'); }
+    if (!c.norepeat) lastCmd = name;
+    cmd = { name, flags: {}, cur: null, step: null };
+    c.run(cmd);
+    if (cmd && !cmd.step) cmd = null;
+    showPrompt(); draw();
+  }
+  function cmdPoint(wx, wy) { const st = cmd.step; return snap(wx, wy, { ...(st.snapOpt || {}), from: st.from || undefined }); }
+  function cmdGotPoint(p) { const st = cmd.step; rh.dist = rh.ang = null; snapInfo = null; lastPt = { x: r2(p.x), y: r2(p.y) }; st.onPoint(lastPt); }
+  /** Enter, Space or a right-click: finish the step, or repeat the last command */
+  function cmdEnter() {
+    if (cmd && cmd.step) { if (cmd.step.onEnter) cmd.step.onEnter(); else endCmd(); return; }
+    if (tool === 'path' && draft) { finishPath(); return; }
+    if (tool !== 'select') { setTool('select'); return; }
+    if (lastCmd) runCmd(lastCmd);
+  }
+  function rhRightClick(sx, sy) {
+    if (cmd || tool !== 'select') { cmdEnter(); return; }
+    if (sx != null && openJointMenu(sx, sy, true)) return;   // a corner or a driver under the pointer keeps its menu
+    cmdEnter();
+  }
+  const NUM = '[-+]?(?:\\d+\\.?\\d*|\\.\\d+)';
+  /** text typed while a command or drawing tool is running; true when it was an option, a point, a distance or an angle */
+  function cmdTyped(txt) {
+    const st = cmd && cmd.step, t = txt.toLowerCase(), compact = txt.replace(/\s+/g, ''), U = UDIV[unit()];
+    if (st && st.opts) {
+      const keys = Object.keys(st.opts), k = keys.find((q) => q.toLowerCase() === t) || keys.find((q) => q.toLowerCase().startsWith(t));
+      if (k) { st.opts[k](); if (cmd) showPrompt(); draw(); return true; }
+    }
+    let m = new RegExp(`^([r@])?(${NUM}),(${NUM})$`, 'i').exec(compact);
+    if (m) {
+      if (!cmdWantsPoint()) { echo(cmd ? 'This step does not take a point.' : 'Start a command first (L line, M move ...), then type the point.'); return true; }
+      const base = m[1] ? (st.rel || lastPt || { x: 0, y: 0 }) : { x: 0, y: 0 };
+      cmdGotPoint({ x: base.x + MX() * (+m[2]) * U, y: base.y + (+m[3]) * U }); return true;
+    }
+    m = new RegExp(`^(${NUM})?<(${NUM})$`).exec(compact);
+    if (m) {
+      const a = +m[2] * Math.PI / 180;
+      if (m[1] != null && cmdWantsPoint() && st.from) { const d = +m[1] * U; cmdGotPoint({ x: st.from.x + MX() * Math.cos(a) * d, y: st.from.y + Math.sin(a) * d }); return true; }
+      rh.ang = a; if (m[1] != null) rh.dist = Math.abs(+m[1]) * U;
+      echo(`Angle locked at ${+m[2]}°.`); draw(); return true;
+    }
+    const v = /^[-+.\d]/.test(compact) ? parseL(txt) : NaN;
+    if (isFinite(v)) {
+      if (st && st.onNumber) { st.onNumber(v, parseFloat(compact)); return true; }
+      if ((st && st.from) || (!cmd && tool !== 'select')) { rh.dist = Math.abs(v); echo(`Distance locked at ${fmtL(rh.dist, isIn() ? 3 : 1)}. Pick the direction.`); draw(); return true; }
+      if (st) { echo('Pick a point first.'); return true; }
+    }
+    return false;
+  }
+  function resolveCmd(raw) {
+    const t = raw.toLowerCase().replace(/^[_'!\-]+/, '').replace(/\s+/g, '');
+    if (acHi > 0 && acItems[acHi]) return acItems[acHi].name;
+    if (ALIAS[t]) return ALIAS[t];
+    const names = Object.keys(CMD);
+    return names.find((n) => n.toLowerCase() === t) || (acItems[0] && acItems[0].name) || names.find((n) => n.toLowerCase().startsWith(t)) || null;
+  }
+  function hideAc() { acItems = []; acHi = 0; const el = $('cmdAc'); if (el) el.hidden = true; }
+  function renderAc() {
+    const el = $('cmdAc');
+    el.hidden = !acItems.length;
+    el.innerHTML = acItems.map((c, i) => `<div class="${i === acHi ? 'hi' : ''}" data-n="${c.name}"><span><b>${c.name}</b>${c.aliases.length ? ' &nbsp;' + c.aliases.map((a) => a.toUpperCase()).join(', ') : ''}</span><small>${esc(c.help)}</small></div>`).join('');
+    el.querySelectorAll('div').forEach((d) => d.onmousedown = (e) => { e.preventDefault(); const n = d.dataset.n; cmdIn.value = ''; hideAc(); cmdIn.blur(); runCmd(n); });
+  }
+  function updateAc() {
+    const t = cmdIn.value.trim().toLowerCase().replace(/^[_'!\-]+/, '');
+    acItems = []; acHi = 0;
+    if (t && /[a-z]/.test(t) && !/^[r@]?[-+.\d]/.test(t.replace(/^4v/, 'v'))) {
+      const score = (c) => { const ns = [c.name, ...c.aliases].map((s) => s.toLowerCase()); return ns.includes(t) ? 0 : ns.some((s) => s.startsWith(t)) ? 1 : c.name.toLowerCase().includes(t) ? 2 : 9; };
+      acItems = Object.values(CMD).map((c) => ({ c, s: score(c) })).filter((q) => q.s < 9).sort((a, b) => a.s - b.s).slice(0, 9).map((q) => q.c);
+    }
+    renderAc();
+  }
+  function cmdSubmit() {
+    const raw = cmdIn.value.trim();
+    if (!raw) { hideAc(); cmdIn.blur(); cmdEnter(); return; }
+    const used = cmdTyped(raw), name = used ? null : resolveCmd(raw);
+    cmdIn.value = ''; hideAc(); cmdIn.blur();
+    if (used) return;
+    if (name) runCmd(name); else echo(`Unknown command: ${raw}`);
+  }
+  cmdIn.addEventListener('input', updateAc);
+  cmdIn.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== cmdIn) hideAc(); }, 150));
+  cmdIn.addEventListener('keydown', (e) => {
+    e.stopPropagation();   // keys typed here never reach the window handler (Enter would otherwise run twice)
+    const k = e.key, empty = !cmdIn.value;
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); cmdSubmit(); }
+    else if (k === 'Escape') { e.preventDefault(); cmdIn.value = ''; hideAc(); cmdIn.blur(); if (!cmdCancel()) { draft = null; if (tool !== 'select') setTool('select'); else { sel = []; refreshSide(); } draw(); } }
+    else if (k === 'Tab') { e.preventDefault(); if (acItems[acHi]) { cmdIn.value = acItems[acHi].name; updateAc(); } }
+    else if ((k === 'ArrowDown' || k === 'ArrowUp') && acItems.length) { e.preventDefault(); acHi = (acHi + (k === 'ArrowDown' ? 1 : acItems.length - 1)) % acItems.length; renderAc(); }
+    else if (k === 'F8') { e.preventDefault(); toggleAid('ortho'); }
+    else if (k === 'F9') { e.preventDefault(); toggleAid('gsnap'); }
+    else if (k === 'Backspace' && empty) cmdIn.blur();
+    else if (k === 'Delete' && empty) { e.preventDefault(); cmdIn.blur(); deleteSel(); }
+    else if ((e.ctrlKey || e.metaKey) && empty && /^[zy]$/i.test(k)) { e.preventDefault(); if (k.toLowerCase() === 'z' && !e.shiftKey) doUndo(); else doRedo(); }
+  });
+  /** keys while nothing is being typed (Rhino mode). true = handled here; false = the classic handler takes it */
+  function rhKey(e) {
+    const k = e.key, a = document.activeElement;
+    if (e.ctrlKey || e.metaKey) { if (k.toLowerCase() === 'a') { e.preventDefault(); runCmd('SelAll'); return true; } return false; }
+    if (k === 'F8') { e.preventDefault(); toggleAid('ortho'); return true; }
+    if (k === 'F9') { e.preventDefault(); toggleAid('gsnap'); return true; }
+    if (k === 'Enter' || k === ' ') {
+      if (a && a.tagName === 'BUTTON' && !a.closest('#board, #tools')) return true;   // a focused button elsewhere keeps Enter / Space
+      e.preventDefault(); if (a && a.tagName === 'BUTTON') a.blur();
+      cmdEnter(); return true;
+    }
+    if (k === 'Escape') return cmdCancel();
+    if (k.length === 1 && !e.altKey && /[a-z0-9.,<@_'\-]/i.test(k)) { e.preventDefault(); cmdIn.focus(); cmdIn.value += k; updateAc(); return true; }
+    return false;
+  }
+
+  // ---- status bar: cursor position, Grid Snap / Ortho / Osnap
+  const AIDS = { gsnap: 'Grid Snap', ortho: 'Ortho', osnap: 'Osnap' };
+  function renderOsbar() {
+    const el = $('osBar'); el.hidden = !RH(); $('cmdBar').hidden = !RH();
+    if (!RH()) return;
+    el.innerHTML = '<span class="coords" id="osCoords">x —   y —</span>' + [['gsnap', 'F9'], ['ortho', 'F8, or hold Shift'], ['osnap', 'snap to corners, ends, middles and faces']].map(([k, tip]) => `<button data-k="${k}" class="${UI[k] ? 'on' : ''}" aria-pressed="${!!UI[k]}" title="${AIDS[k]} (${tip})">${AIDS[k]}</button>`).join('') + '<span class="grow"></span><span class="note" id="osSel"></span>';
+    el.querySelectorAll('button').forEach((b) => b.onclick = () => toggleAid(b.dataset.k));
+  }
+  function toggleAid(k) { UI[k] = !UI[k]; saveUI(); renderOsbar(); echo(`${AIDS[k]} ${UI[k] ? 'on' : 'off'}.`); draw(); }
+  function showCoords(wx, wy) { const el = $('osCoords'), u = unit(), dp = u === 'mm' ? 1 : 2; if (el) el.textContent = `x ${(MX() * wx / UDIV[u]).toFixed(dp)}   y ${(wy / UDIV[u]).toFixed(dp)} ${u}`; }
+  function rhStatus() { if (!RH()) return; const el = $('osSel'); if (el) el.textContent = sel.length ? `${sel.length} selected` : ''; }
+  function renderCtl() {
+    const el = $('ctlSeg'); if (!el) return;
+    if (!RH_OK) { el.closest('.field').style.display = 'none'; return; }
+    el.innerHTML = [['rhino', 'Rhino', 'Command line, Rhino mouse buttons and aliases (M, ZS, ZE ...)'], ['classic', 'Classic', 'Single-key tools (V, P, D ...) and left-drag panning']].map(([k, v, tip]) => `<button class="${UI.controls === k ? 'on' : ''}" data-c="${k}" title="${tip}">${v}</button>`).join('');
+    el.querySelectorAll('button').forEach((b) => b.onclick = () => setControls(b.dataset.c));
+  }
+  function setControls(c) {
+    if (UI.controls === c || (c === 'rhino' && !RH_OK)) return;
+    cmdCancel(true); UI.controls = c; saveUI();
+    renderCtl(); renderOsbar(); renderViewSide(); setTool('select'); refreshSide(); applyLayout(); showPrompt();
+  }
+
+  // ---- selection boxes, and moving / copying / turning what is selected
+  /** Rhino selection box: dragged left to right = window (wholly inside), right to left = crossing (anything it touches) */
+  function rhMarquee(d) {
+    const [ax, ay] = w2s(d.wx, d.wy), [bx, by] = w2s(d.x2, d.y2);
+    if (hyp(bx - ax, by - ay) < 4) { if (!d.add && !d.sub) sel = []; refreshSide(); return; }   // a click on nothing deselects
+    const crossing = bx < ax, x0 = Math.min(d.wx, d.x2), x1 = Math.max(d.wx, d.x2), y0 = Math.min(d.wy, d.y2), y1 = Math.max(d.wy, d.y2);
+    const inside = (p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+    const rect = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    const segHit = (a, b) => inside(a) || inside(b) || rect.some((c, i) => segCross(a, b, c, rect[(i + 1) % 4]));
+    const polyHit = (q) => (crossing ? q.some(inside) || polyOverlap(q, rect) : q.every(inside));
+    const found = [];
+    for (const p of design.panels) if (!p.arc && polyHit(HG.panelQuad(p, design.t))) found.push({ t: 'panel', id: p.id });
+    for (const g of design.arcs || []) { const qs = design.panels.filter((p) => p.arc === g.id).map((p) => HG.panelQuad(p, design.t)); if (qs.length && (crossing ? qs.some(polyHit) : qs.every(polyHit))) found.push({ t: 'arc', id: g.id }); }
+    for (const b of design.boundaries) { const a = { x: b.x1, y: b.y1 }, c = { x: b.x2, y: b.y2 }; if (crossing ? segHit(a, c) : inside(a) && inside(c)) found.push({ t: 'boundary', id: b.id }); }
+    for (const p of design.paths) { if (p.auto) continue; if (crossing ? p.pts.some((q, i) => i && segHit(p.pts[i - 1], q)) : p.pts.every(inside)) found.push({ t: 'path', id: p.id }); }   // found paths follow the boards on their own
+    for (const dr of design.drivers) { const sh = driverShapesWorld(dr); if (crossing ? sh.some(polyHit) : sh.every(polyHit)) found.push({ t: 'driver', id: dr.id }); }
+    const has = (list, s) => list.some((q) => q.t === s.t && q.id === s.id);
+    sel = d.sub ? sel.filter((s) => !has(found, s)) : d.add ? [...sel, ...found.filter((s) => !has(sel, s))] : found;
+    refreshSide();
+  }
+  function selItems() {
+    const it = { panels: [], arcs: [], bounds: [], paths: [], drivers: [] }, arcIds = new Set();
+    for (const s of sel) {
+      if (s.t === 'panel') { const p = design.panels.find((q) => q.id === s.id); if (p && p.arc) arcIds.add(p.arc); else if (p) it.panels.push(p); }
+      else if (s.t === 'arc') arcIds.add(s.id);
+      else if (s.t === 'boundary') { const p = design.boundaries.find((q) => q.id === s.id); if (p) it.bounds.push(p); }
+      else if (s.t === 'path') { const p = design.paths.find((q) => q.id === s.id); if (p) it.paths.push(p); }
+      else if (s.t === 'driver') { const p = design.drivers.find((q) => q.id === s.id); if (p) it.drivers.push(p); }
+    }
+    it.arcs = (design.arcs || []).filter((g) => arcIds.has(g.id));
+    return it;
+  }
+  /** pt(x, y) -> [x, y] moves points; vec(x, y) turns directions (a driver's facing). copy = leave the originals. Returns the new selection. */
+  function applyXform(it, pt, vec, copy) {
+    const ns = [], P = (x, y) => { const q = pt(x, y); return [r2(q[0]), r2(q[1])]; };
+    const seg = (list, t, p0) => { const p = copy ? { ...p0, id: nid() } : p0, a = P(p0.x1, p0.y1), b = P(p0.x2, p0.y2); p.x1 = a[0]; p.y1 = a[1]; p.x2 = b[0]; p.y2 = b[1]; if (copy) list.push(p); ns.push({ t, id: p.id }); };
+    for (const p0 of it.panels) seg(design.panels, 'panel', p0);
+    for (const g0 of it.arcs) {
+      const g = copy ? { ...g0, id: nid() } : g0, pts = ['a', 'm', 'b'].map((k) => P(g0[k].x, g0[k].y));
+      ['a', 'm', 'b'].forEach((k, i) => { g[k] = { x: pts[i][0], y: pts[i][1] }; });
+      if (copy) design.arcs.push(g);
+      ns.push({ t: 'arc', id: g.id });
+    }
+    for (const b0 of it.bounds) seg(design.boundaries, 'boundary', b0);
+    for (const p0 of it.paths) {
+      const pts = p0.pts.map((v) => { const q = P(v.x, v.y); return { x: q[0], y: q[1] }; }), p = copy ? { ...p0, id: nid(), name: nextPathName() } : p0;
+      p.pts = pts; p.auto = false; if (copy) design.paths.push(p);
+      ns.push({ t: 'path', id: p.id });
+    }
+    for (const d0 of it.drivers) {   // after the boards, so each driver re-attaches to the board it now sits on
+      const d = copy ? { ...d0, id: nid() } : d0, q = P(d0.x, d0.y), n = vec ? vec(d0.nx, d0.ny) : [d0.nx, d0.ny];
+      d.x = q[0]; d.y = q[1]; d.nx = n[0]; d.ny = n[1]; if (copy) design.drivers.push(d);
+      mountDriver(d); ns.push({ t: 'driver', id: d.id });
+    }
+    return ns;
+  }
+  function rubber(a, b) { const [x0, y0] = w2s(a.x, a.y), [x1, y1] = w2s(b.x, b.y); ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore(); }
+  /** dashed outline of the selection as it would land */
+  function drawGhost(it, pt) {
+    ctx.save(); ctx.strokeStyle = C.accent; ctx.lineWidth = 1.3; ctx.setLineDash([5, 3]);
+    const poly = (ps, closed) => { ctx.beginPath(); ps.forEach((v, i) => { const q = pt(v.x, v.y), [x, y] = w2s(q[0], q[1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); if (closed) ctx.closePath(); ctx.stroke(); };
+    for (const p of it.panels) poly(HG.panelQuad(p, design.t), true);
+    for (const g of it.arcs) for (const p of design.panels) if (p.arc === g.id) poly(HG.panelQuad(p, design.t), true);
+    for (const b of it.bounds) poly([{ x: b.x1, y: b.y1 }, { x: b.x2, y: b.y2 }]);
+    for (const p of it.paths) poly(p.pts);
+    for (const d of it.drivers) for (const sh of driverShapesWorld(d)) poly(sh, true);
+    ctx.restore();
+  }
+  function drawCmdPreview() {
+    const st = cmd.step, cur = cmd.cur; if (!cur || !st) return;
+    if (st.from) rubber(st.from, cur);
+    if (st.preview) st.preview(cur);
+    if (st.from && !draft) { const [x, y] = w2s(cur.x, cur.y), dx = MX() * (cur.x - st.from.x), dy = cur.y - st.from.y; tag(`${fmtL(hyp(dx, dy), isIn() ? 2 : undefined)} · ${(Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1)}°`, x + 14, y - 14, C.accent); }
+  }
+  function selBounds() {
+    const it = selItems(), xs = [], ys = [], add = (v) => { xs.push(v.x); ys.push(v.y); };
+    for (const p of it.panels) HG.panelQuad(p, design.t).forEach(add);
+    for (const g of it.arcs) for (const p of design.panels) if (p.arc === g.id) HG.panelQuad(p, design.t).forEach(add);
+    for (const b of it.bounds) { add({ x: b.x1, y: b.y1 }); add({ x: b.x2, y: b.y2 }); }
+    for (const p of it.paths) p.pts.forEach(add);
+    for (const d of it.drivers) driverShapesWorld(d).forEach((sh) => sh.forEach(add));
+    return xs.length ? [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)] : null;
+  }
+  const vpList = (all) => (all ? shownVps() : [activeVp]);
+  function zoomExtents(all) {
+    sync3dNow();   // frame the model as it is now, not as it was last drawn
+    for (const id of vpList(all)) {
+      if (id === '2d') { fit(); draw(); continue; }
+      const v = VPS.find((q) => q.id === id); if (v && v.v3) { v.v3.fit(); v.v3.render(); }
+    }
+  }
+  function zoomSelected(all) {
+    const b = selBounds();
+    if (!b) { echo('Nothing is selected. Select something first, then ZS.'); return; }
+    const keys = new Set(sel.map((s) => s.t + ':' + s.id));
+    sync3dNow();
+    for (const id of vpList(all)) {
+      if (id === '2d') { fitBox(b[0], b[1], b[2], b[3]); draw(); continue; }
+      const v = VPS.find((q) => q.id === id); if (v && v.v3) { v.v3.fit(keys); v.v3.render(); }
+    }
+  }
+  /** commands that work on a selection ask for one first when nothing is selected, as Rhino does */
+  function needSel(what, then) {
+    if (sel.length) { then(); return; }
+    cmd.step = { prompt: `Select objects to ${what}. Press Enter when done`, select: true, onEnter: () => { if (!sel.length) { endCmd('Nothing selected.'); return; } then(); } };
+    showPrompt();
+  }
+  function lineCmd(chain) {
+    const face = () => `Face=${align === 'center' ? 'Centre' : align === 'left' ? 'Left' : 'Right'}`;
+    const opts = { Face: () => { align = align === 'center' ? 'left' : align === 'left' ? 'right' : 'center'; } };
+    const second = (p) => ask(() => `${chain ? 'Next point of the boards' : 'End of the board'} ( ${face()} )`, (q) => {
+      if (hyp(q.x - p.x, q.y - p.y) < 5) { draft = null; echo('Too short for a board.'); return; }
+      draft = { kind: 'panel', x1: p.x, y1: p.y, x2: q.x, y2: q.y }; finishLine();
+      if (chain) second(q); else endCmd();
+    }, { from: p, opts, live: (cur) => { draft = { kind: 'panel', x1: p.x, y1: p.y, x2: cur.x, y2: cur.y }; } });
+    ask(() => `Start of the board ( ${face()} )`, second, { opts });
+  }
+  const copyTxt = () => `Copy=${cmd && cmd.flags.copy ? 'Yes' : 'No'}`;
+  const copyOpt = () => ({ Copy: () => { cmd.flags.copy = !cmd.flags.copy; } });
+
+  def('Move', ['m'], 'Move the selection', () => needSel('move', () => {
+    const it = selItems();
+    ask('Point to move from', (p0) => ask('Point to move to', (p1) => { commit(); applyXform(it, (x, y) => [x + p1.x - p0.x, y + p1.y - p0.y], null, false); changed(); endCmd(); },
+      { from: p0, preview: (cur) => drawGhost(it, (x, y) => [x + cur.x - p0.x, y + cur.y - p0.y]) }));
+  }));
+  def('Copy', ['co', 'cp'], 'Copy the selection', () => needSel('copy', () => {
+    const it = selItems(); let made = false;
+    ask('Point to copy from', (p0) => {
+      const next = () => ask('Point to copy to. Press Enter when done', (p1) => { if (!made) { commit(); made = true; } sel = applyXform(it, (x, y) => [x + p1.x - p0.x, y + p1.y - p0.y], null, true); changed(); next(); },
+        { from: p0, preview: (cur) => drawGhost(it, (x, y) => [x + cur.x - p0.x, y + cur.y - p0.y]) });
+      next();
+    });
+  }));
+  def('Rotate', ['ro'], 'Turn the selection about a point', () => needSel('rotate', () => {
+    const it = selItems();
+    const rot = (c, a) => { const cs = Math.cos(a), sn = Math.sin(a); return [(x, y) => [c.x + (x - c.x) * cs - (y - c.y) * sn, c.y + (x - c.x) * sn + (y - c.y) * cs], (x, y) => [x * cs - y * sn, x * sn + y * cs]]; };
+    const done = (c, a) => { const copy = !!cmd.flags.copy, f = rot(c, a); commit(); const ns = applyXform(it, f[0], f[1], copy); if (copy) sel = ns; changed(); endCmd(`Rotated ${(a * MX() * 180 / Math.PI).toFixed(1)}°.`); };
+    ask('Centre of rotation', (c) => ask(() => `Angle or first reference point ( ${copyTxt()} )`, (p1) => {
+      const a0 = Math.atan2(p1.y - c.y, p1.x - c.x);
+      ask(() => `Second reference point ( ${copyTxt()} )`, (p2) => done(c, Math.atan2(p2.y - c.y, p2.x - c.x) - a0), { from: c, opts: copyOpt(), preview: (cur) => drawGhost(it, rot(c, Math.atan2(cur.y - c.y, cur.x - c.x) - a0)[0]) });
+    }, { from: c, opts: copyOpt(), onNumber: (mm, deg) => done(c, deg * MX() * Math.PI / 180) }));
+  }));
+  def('Mirror', ['mi'], 'Mirror the selection across a line', () => needSel('mirror', () => {
+    const it = selItems(); cmd.flags.copy = true;
+    const refl = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1, vec = (x, y) => { const k = 2 * (x * dx + y * dy) / L2; return [k * dx - x, k * dy - y]; }; return [(x, y) => { const q = vec(x - a.x, y - a.y); return [a.x + q[0], a.y + q[1]]; }, vec]; };
+    ask(() => `Start of the mirror line ( ${copyTxt()} )`, (a) => ask(() => `End of the mirror line ( ${copyTxt()} )`, (b) => {
+      if (hyp(b.x - a.x, b.y - a.y) < 0.5) { echo('The mirror line needs two different points.'); return; }
+      const copy = !!cmd.flags.copy, f = refl(a, b); commit(); const ns = applyXform(it, f[0], f[1], copy); if (copy) sel = ns; changed(); endCmd();
+    }, { from: a, opts: copyOpt(), preview: (cur) => { if (hyp(cur.x - a.x, cur.y - a.y) > 0.5) drawGhost(it, refl(a, cur)[0]); } }), { opts: copyOpt() });
+  }));
+  def('Line', ['l', 'board', 'panel'], 'Draw one board', () => lineCmd(false));
+  def('Polyline', ['pl'], 'Draw boards end to end', () => lineCmd(true));
+  def('Rectangle', ['rec', 'box'], 'Box shell: four boards inside an outline', () => ask('First corner of the box (outside)', (p) => ask('Other corner', (q) => {
+    draft = null; const ok = addBoxShell(Math.min(p.x, q.x), Math.min(p.y, q.y), Math.max(p.x, q.x), Math.max(p.y, q.y)); endCmd(ok ? null : 'Too small for a box.');
+  }, { rel: p, snapOpt: { noObjects: true }, live: (cur) => { draft = { kind: 'box', x1: p.x, y1: p.y, x2: cur.x, y2: cur.y }; } }), { snapOpt: { noObjects: true } }));
+  def('Arc', ['a'], 'Curved board (bent ply)', () => setTool('arc'));
+  def('AirPath', ['path'], 'Draw an air path by hand', () => setTool('path'));
+  def('Driver', ['dr', 'speaker'], 'Mount a driver on a board', () => setTool('driver'));
+  def('Divider', ['div'], 'Air divider: closes a chamber, no wood', () => setTool('boundary'));
+  def('Delete', ['del', 'erase'], 'Delete the selection', () => deleteSel(), { norepeat: true });
+  def('Distance', ['di', 'dist'], 'Measure between two points', () => ask('First point', (a) => ask('Second point', (b) => {
+    const dx = MX() * (b.x - a.x), dy = b.y - a.y, dp = isIn() ? 3 : 1;
+    endCmd(`Distance = ${fmtL(hyp(dx, dy), dp)}   dx = ${fmtL(dx, dp)}   dy = ${fmtL(dy, dp)}   angle = ${(Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1)}°`);
+  }, { from: a })));
+  def('Width', ['w'], 'Set the cabinet width', () => ask(() => `Cabinet width <${fmtL(design.W)}>`, null, { onNumber: (mm) => { commit(); design.W = Math.abs(mm); clampWidth(true); changed(); endCmd(`Cabinet width ${fmtL(design.W)}.`); } }));
+  def('Flip', [], 'Flip the selected driver to the other side of its board', () => { const ds = sel.filter((s) => s.t === 'driver'); if (!ds.length) { echo('Select a driver first.'); return; } commit(); ds.forEach((s) => { const d = design.drivers.find((q) => q.id === s.id); d.nx = -d.nx; d.ny = -d.ny; if (d.mount) d.mount.side = -d.mount.side; }); changed(); });
+  def('SelAll', [], 'Select everything', () => {
+    sel = [...design.panels.filter((p) => !p.arc).map((p) => ({ t: 'panel', id: p.id })), ...(design.arcs || []).map((g) => ({ t: 'arc', id: g.id })), ...design.boundaries.map((b) => ({ t: 'boundary', id: b.id })),
+      ...design.drivers.map((d) => ({ t: 'driver', id: d.id })), ...design.paths.filter((p) => !p.auto).map((p) => ({ t: 'path', id: p.id }))];
+    refreshSide(); draw();
+  }, { transparent: true });
+  def('SelNone', [], 'Deselect everything', () => { sel = []; refreshSide(); draw(); }, { transparent: true });
+  def('Undo', ['u'], 'Undo', () => doUndo(), { norepeat: true });
+  def('Redo', [], 'Redo', () => doRedo(), { norepeat: true });
+  def('Zoom', ['z'], 'Zoom: Extents, Selected or All', () => ask('Zoom ( Extents  Selected  All )', null, { opts: { Extents: () => { zoomExtents(false); endCmd(); }, Selected: () => { zoomSelected(false); endCmd(); }, All: () => { zoomExtents(true); endCmd(); } } }));
+  def('ZE', [], 'Zoom Extents', () => zoomExtents(false), { transparent: true });
+  def('ZEA', [], 'Zoom Extents, all viewports', () => zoomExtents(true), { transparent: true });
+  def('ZS', [], 'Zoom Selected', () => zoomSelected(false), { transparent: true });
+  def('ZSA', [], 'Zoom Selected, all viewports', () => zoomSelected(true), { transparent: true });
+  def('Ortho', ['o'], 'Ortho on / off (F8)', () => toggleAid('ortho'), { transparent: true });
+  def('Snap', ['s'], 'Grid Snap on / off (F9)', () => toggleAid('gsnap'), { transparent: true });
+  def('Osnap', [], 'Object snaps on / off', () => toggleAid('osnap'), { transparent: true });
+  def('4View', [], 'Four viewports: Top, Perspective, Front, drawing', () => setLayout('four'), { transparent: true });
+  def('MaxViewport', ['max'], 'Maximise / restore the active viewport', () => toggleMax(activeVp), { transparent: true });
+  for (const n of ['Perspective', 'Top', 'Front', 'Right', 'Left', 'Back']) def(n, [], `Set the active viewport to ${n}`, () => setViewCmd(n), { transparent: true });
+  def('Shaded', ['shadedviewport'], '3-D display: shaded', () => setMode3d('shaded'), { transparent: true });
+  def('Wireframe', ['wireframeviewport'], '3-D display: wireframe', () => setMode3d('wireframe'), { transparent: true });
+  def('Ghosted', ['ghostedviewport'], '3-D display: ghosted (see-through)', () => setMode3d('ghosted'), { transparent: true });
+  def('SidePanels', [], 'Side panels in 3-D: see-through, solid or hidden', () => setSides(UI.sides === 'ghost' ? 'show' : UI.sides === 'show' ? 'hide' : 'ghost'), { transparent: true });
+  def('CutList', [], 'Show the cut list', () => cutList(), { norepeat: true });
+  def('Help', [], 'How to use it', () => setHelp(true), { transparent: true });
+  def('Classic', [], 'Switch back to the classic controls', () => setControls('classic'), { norepeat: true });
+
   // ---------------------------------------------------------------- boot
-  $('preset').onchange = (e) => { if (!e.target.value) return; commit(); design = makePreset(e.target.value); e.target.value = ''; sel = []; fit(); changed(); setPickerText(); renderSnap(); renderViewSide(); renderViewSide(); };
+  $('preset').onchange = (e) => { if (!e.target.value) return; commit(); design = makePreset(e.target.value); e.target.value = ''; sel = []; refit3d(); fit(); changed(); setPickerText(); renderSnap(); renderViewSide(); renderViewSide(); };
   $('btnUndo').onclick = doUndo; $('btnRedo').onclick = doRedo;
   const saved = LS.get('shl.design');
   try { design = saved ? Object.assign(baseDesign('Untitled'), JSON.parse(saved)) : null; } catch (e) { design = null; }
@@ -3360,7 +4013,7 @@
   if (design.autoPaths == null) design.autoPaths = true;
   readColors();
   const mq = window.matchMedia('(prefers-color-scheme: dark)');
-  const reTheme = () => { readColors(); draw(); drawChart(); };
+  const reTheme = () => { readColors(); draw(); drawChart(); sync3d(true); };
   mq.addEventListener ? mq.addEventListener('change', reTheme) : mq.addListener(reTheme);
   new MutationObserver(reTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   loadUserDrivers().forEach(registerUser);
@@ -3369,8 +4022,13 @@
   Object.values(design.custom || {}).forEach((d) => { if (d && /^user:/.test(d.k || '') && !LIBMAP.has(d.k)) registerUser({ ...d }); });
   $('drvImport').onclick = openImport;
   renderTools(); renderTabs(); setTool('select'); setPickerText(); renderSnap(); renderViewSide();
-  new ResizeObserver(resize).observe($('board'));
+  defLayout = $('board').clientWidth >= 700 ? 'split' : '2d';
+  { const hr = $('helpRhino'); if (hr && !RH_OK) hr.style.display = 'none'; }
+  renderCtl(); renderOsbar(); initVps(); applyLayout(); showPrompt();
+  if (RH()) echo('Rhino-style controls are on. Type a command (M, Co, Ro, Mi, L, ZS, ZE ...) and press Enter.');
+  new ResizeObserver(resize).observe($('vp2d'));
   new ResizeObserver(() => { const cr = chartCv.getBoundingClientRect(); chartCv.width = Math.round(cr.width * view.dpr); chartCv.height = Math.round(cr.height * view.dpr); drawChart(); }).observe(chartCv);
   analyse(); resize();
-  window.SHL = { quantizeBuild, quantizeIn, get design() { return design; }, get A() { return A; }, get R() { return R; }, changed, w2s, s2w, hit: (x, y) => hit(...s2w(x, y)), moveDriverTo, driverHits, get drag() { return drag; } };
+  window.SHL = { quantizeBuild, quantizeIn, get design() { return design; }, get A() { return A; }, get R() { return R; }, changed, w2s, s2w, hit: (x, y) => hit(...s2w(x, y)), moveDriverTo, driverHits, get drag() { return drag; },
+    UI, runCmd, setControls, setLayout, get sel() { return sel; }, set sel(v) { sel = v; refreshSide(); draw(); }, get cmd() { return cmd; }, get view3d() { return VPS.map((v) => ({ id: v.id, v3: v.v3 })); } };
 })();

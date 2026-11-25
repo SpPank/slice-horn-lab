@@ -93,6 +93,7 @@ const page = rd('src/template.html')
   .replace('/*LIB*/', () => libJs)
   .replace('/*CORE*/', () => rd('src/core.js'))
   .replace('/*GEOM*/', () => rd('src/geom.js'))
+  .replace('/*V3D*/', () => rd('src/view3d.js'))
   .replace('/*APP*/', () => rd('src/app.js'));
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'artifact.html'), page);

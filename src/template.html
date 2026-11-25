@@ -58,11 +58,43 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .helpbody .bad { color: var(--bad); }
 .helpbody a { color: var(--accent); }
 .tools hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
-.board { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
-#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; display: block; }
-.hud { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; max-width: calc(100% - 20px); }
+.board { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* viewports: the side-view drawing (Right) plus WebGL views (Top, Perspective, Front), laid out like Rhino's 4View */
+.vps { flex: 1 1 auto; min-height: 0; display: grid; gap: 2px; background: var(--line); grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.vp { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); display: none; }
+.vp.show { display: block; }
+.vp canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.vps[data-layout="split"] { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.vps[data-layout="split"] #vp2d { order: 1; }
+.vps[data-layout="split"] #vpPersp { order: 2; }
+.vps[data-layout="split"][data-stack] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+.vps[data-layout="four"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.vptitle { position: absolute; left: 6px; top: 6px; z-index: 3; padding: 2px 8px; font-size: 11.5px; font-weight: 600; border-radius: 4px; background: color-mix(in srgb, var(--panel) 90%, transparent); }
+.vp.on .vptitle { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.vpmsg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+#cv { cursor: crosshair; }
+/* Rhino-style command line (top) and status bar (bottom) */
+.cmdbar { flex: none; position: relative; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); font-family: var(--font-data); font-size: 12px; }
+.cmdbar[hidden], .osbar[hidden] { display: none; }
+.cmdhist { height: 2.9em; padding: 3px 10px 0; line-height: 1.45; color: var(--muted); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; white-space: nowrap; }
+.cmdline { display: flex; align-items: center; gap: 6px; padding: 2px 10px 4px; cursor: text; }
+.cmdline:focus-within { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cmdline label { white-space: nowrap; color: var(--ink); font-weight: 500; }
+.cmdline input[type=text] { flex: 1; min-width: 60px; border: 0; background: transparent; padding: 2px 0; font-family: var(--font-data); font-size: 12px; outline: none; }
+.cmdac { position: absolute; left: 10px; top: 100%; z-index: 40; min-width: 300px; max-width: calc(100% - 20px); max-height: 264px; overflow: auto; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.cmdac[hidden] { display: none; }
+.cmdac div { padding: 4px 9px; cursor: pointer; display: flex; justify-content: space-between; gap: 16px; }
+.cmdac div.hi, .cmdac div:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cmdac small { color: var(--muted); font-family: var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 3px 8px; background: var(--panel); border-top: 1px solid var(--line); font-size: 11.5px; }
+.osbar .coords { font-family: var(--font-data); color: var(--muted); min-width: 16em; white-space: nowrap; }
+.osbar button { padding: 1px 8px; font-size: 11.5px; border-radius: 3px; color: var(--muted); }
+.osbar button.on { color: var(--ink); font-weight: 700; border-color: var(--muted); }
+.osbar .grow { flex: 1; }
+.hud { position: absolute; left: 10px; top: 34px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; max-width: calc(100% - 20px); }
 .hud .chip { pointer-events: auto; align-self: flex-start; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--r); padding: 5px 9px; font-size: 12px; }
 .hud .hint { color: var(--muted); }
+.hud .hint:empty { display: none; }
 .status { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
 .status .chip { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; font-size: 12px; pointer-events: auto; }
 .status .chip.warn { border-color: var(--warn); color: var(--warn); }
@@ -155,10 +187,10 @@ table.ts input { width: 70px; padding: 1px 4px; }
 .modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; width: min(760px, 100%); max-height: 86vh; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .modal textarea { width: 100%; box-sizing: border-box; min-height: 260px; font-family: var(--font-data); font-size: 11.5px; }
 .modal pre { font-family: var(--font-data); font-size: 11.5px; white-space: pre-wrap; margin: 0; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 10px; overflow-x: auto; }
-.seg #snapSeg, .seg #viewSeg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
-.seg #snapSeg button, .seg #viewSeg button { border: 0; border-radius: 0; padding: 4px 10px; font-family: var(--font-data); font-size: 12px; background: var(--raised); }
-.seg #snapSeg button + button, .seg #viewSeg button + button { border-left: 1px solid var(--line); }
-.seg #snapSeg button.on, .seg #viewSeg button.on { background: var(--ink); color: var(--panel); }
+.seg #snapSeg, .seg #viewSeg, .seg #ctlSeg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg #snapSeg button, .seg #viewSeg button, .seg #ctlSeg button { border: 0; border-radius: 0; padding: 4px 10px; font-family: var(--font-data); font-size: 12px; background: var(--raised); }
+.seg #snapSeg button + button, .seg #viewSeg button + button, .seg #ctlSeg button + button { border-left: 1px solid var(--line); }
+.seg #snapSeg button.on, .seg #viewSeg button.on, .seg #ctlSeg button.on { background: var(--ink); color: var(--panel); }
 .sl { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 5.2em 1.6em; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .sl input[type=range] { width: 100%; min-width: 0; accent-color: var(--accent); }
 .sl .num { width: 100%; box-sizing: border-box; }
@@ -213,6 +245,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     </select></label>
     <div class="field seg" role="group" aria-label="Grid and units"><span>Grid</span><div id="snapSeg"></div></div>
     <div class="field seg" role="group" aria-label="Side view"><span>View</span><div id="viewSeg" class="segbox"></div></div>
+    <div class="field seg" role="group" aria-label="Mouse and keyboard controls"><span>Controls</span><div id="ctlSeg"></div></div>
     <div class="grow"></div>
     <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button><button id="btnRedo" title="Redo (Ctrl+Y)">Redo</button>
     <button id="btnFile">File…</button>
@@ -220,9 +253,23 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   <div class="main">
     <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
     <div class="board" id="board">
-      <canvas id="cv"></canvas>
-      <div class="hud"><div class="chip hint" id="hint"></div></div>
-      <div class="status" id="status"></div>
+      <div class="cmdbar" id="cmdBar" hidden>
+        <div class="cmdhist" id="cmdHist" aria-live="polite"></div>
+        <div class="cmdline"><label for="cmdIn" id="cmdPrompt">Command:</label><input type="text" id="cmdIn" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+        <div class="cmdac" id="cmdAc" hidden></div>
+      </div>
+      <div class="vps" id="vps" data-layout="2d">
+        <div class="vp" id="vpTop"><canvas></canvas><button class="vptitle"></button></div>
+        <div class="vp" id="vpPersp"><canvas></canvas><button class="vptitle"></button></div>
+        <div class="vp" id="vpFront"><canvas></canvas><button class="vptitle"></button></div>
+        <div class="vp show" id="vp2d">
+          <canvas id="cv"></canvas>
+          <button class="vptitle" id="vpTitle2d"></button>
+          <div class="hud"><div class="chip hint" id="hint"></div></div>
+          <div class="status" id="status"></div>
+        </div>
+      </div>
+      <div class="osbar" id="osBar" hidden></div>
       <div class="helppanel" id="helpPanel" hidden role="dialog" aria-label="How to use Slice Horn Lab">
         <div class="helphead"><b>How to use Slice Horn Lab</b><button id="helpClose" aria-label="Close help" title="Close (Esc)">✕</button></div>
         <div class="helpbody">
@@ -247,6 +294,22 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
             <li>Air paths are found automatically. You don't need to draw them.</li>
             <li><span class="kbd">Ctrl Z</span> undo · wheel zooms · right-drag pans · <span class="kbd">0</span> fit · <span class="kbd">?</span> this help.</li>
           </ul>
+          <h4>The 3-D view</h4>
+          <ul>
+            <li>The <b>cube button</b> in the toolbar shows a 3-D view beside the drawing: the boards extruded across the cabinet width, the side panels (see-through, so the fold shows) and the drivers with their cutouts. It follows the drawing as you edit.</li>
+            <li><b>Drag</b> rotates it, <span class="kbd">Shift</span> + drag pans, <span class="kbd">Ctrl</span> + drag zooms, the wheel zooms. <b>Click a board</b> to select it in the drawing too.</li>
+            <li><b>Click a viewport's name</b> for Wireframe / Shaded / Ghosted, solid or hidden side panels, Top / Front / Right views and a 4-viewport layout. Double-click the name to maximise that viewport, and again to restore.</li>
+          </ul>
+          <div id="helpRhino">
+          <h4>Rhino-style controls (this computer only)</h4>
+          <ul>
+            <li><b>Controls</b> (top bar) switches between <b>Rhino</b> and <b>Classic</b>. The keys under <i>Drawing</i> above are the Classic ones.</li>
+            <li><b>Command line</b>: just start typing, then <span class="kbd">Enter</span> or <span class="kbd">Space</span>. <span class="kbd">M</span> Move · <span class="kbd">Co</span> Copy · <span class="kbd">Ro</span> Rotate · <span class="kbd">Mi</span> Mirror · <span class="kbd">L</span> Line (a board) · <span class="kbd">PL</span> Polyline (boards end to end) · <span class="kbd">Rec</span> Rectangle (box shell) · <span class="kbd">ZS</span> Zoom Selected · <span class="kbd">ZE</span> Zoom Extents · <span class="kbd">U</span> Undo · <span class="kbd">Di</span> Distance · <span class="kbd">SelAll</span> · <span class="kbd">4View</span> · <span class="kbd">MaxViewport</span>. Enter, Space or a right-click repeats the last command; <span class="kbd">Esc</span> cancels.</li>
+            <li><b>Exact sizes</b>: while a command asks for a point, type a distance (<b>24</b>), a point (<b>12,6</b>), a relative point (<b>r12,0</b> or <b>@12,0</b>), or an angle (<b>&lt;45</b>, <b>24&lt;45</b>), in the grid's units.</li>
+            <li><b>Mouse</b>: right-drag pans the drawing and rotates the Perspective view; <span class="kbd">Shift</span> + right-drag pans, <span class="kbd">Ctrl</span> + right-drag zooms, the wheel zooms. Click selects, <span class="kbd">Shift</span> adds, <span class="kbd">Ctrl</span> removes. Drag a box left-to-right for a window, right-to-left for a crossing selection.</li>
+            <li><b>Status bar</b>: Grid Snap (<span class="kbd">F9</span>), Ortho (<span class="kbd">F8</span>, or hold <span class="kbd">Shift</span>) and Osnap. <span class="kbd">Alt</span> while dragging a board end moves that end only.</li>
+          </ul>
+          </div>
           <h4>Handy extras</h4>
           <ul>
             <li><b>Power slider</b> (left of the graph, 1 W–10 kW, on every tab): scales SPL, excursion and air velocity; anything past Xmax turns <b class="bad">red</b>.</li>
@@ -283,4 +346,5 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
 <script>/*LIB*/</script>
 <script>/*CORE*/</script>
 <script>/*GEOM*/</script>
+<script>/*V3D*/</script>
 <script>/*APP*/</script>

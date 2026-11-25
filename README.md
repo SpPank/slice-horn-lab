@@ -47,6 +47,16 @@ The left side is the cabinet's **side view**. Every line you draw is a board wit
 
 Width feeds straight into the simulation: every air-path area (throat, mouth, ports) and every chamber volume is its side-view size × the width. The line under the slider shows the throat and mouth areas live. The response usually moves by only a dB or two, mostly around the low hump and in the ripple, because the resonances are set by path *length*, not area. To make that visible, the curve from before you touched the slider stays on the chart as a dashed **Before** line, with the biggest difference written under the slider. Any other edit (or **Clear before**) removes it.
 
+### The 3-D view
+
+The **cube button** in the toolbar shows a 3-D view beside the drawing: the boards extruded across the cabinet width, the two side panels (see-through by default so the fold is visible) and the drivers with their cutouts. It follows the drawing as you edit, and it is on from the start when the window has room for both.
+
+- **Drag** rotates it, **Shift** + drag pans, **Ctrl** + drag zooms, and the wheel zooms.
+- **Click a board** in it to select that board in the drawing as well.
+- **Click a viewport's name** (top-left of each view) for Wireframe / Shaded / Ghosted display, solid or hidden side panels, Top / Front / Right / Left / Back views, and a 4-viewport layout (Top, Perspective, Front, drawing). **Double-click** the name to maximise that viewport, and again to restore.
+
+The side panels are drawn as the outline around all the boards, so a cabinet whose profile has a notch in it shows a filled-in side.
+
 ### Tools (left toolbar)
 
 | Key | Tool | What it does |
