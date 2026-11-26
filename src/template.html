@@ -58,6 +58,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .helpbody .bad { color: var(--bad); }
 .helpbody a { color: var(--accent); }
 .tools hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.cabtabs { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; font-size: 12px; }
+.cabtabs button { padding: 3px 10px; border-radius: var(--r, 5px); }
+.cabtabs button.cab.on { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
+.cabtabs button.x { padding: 1px 6px; margin-left: -3px; opacity: .7; }
+.cabtabs .grow { flex: 1; }
+.cabtabs label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
 .board { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 /* viewports: the side-view drawing (Right) plus WebGL views (Top, Perspective, Front), laid out like Rhino's 4View */
 .vps { flex: 1 1 auto; min-height: 0; display: grid; gap: 2px; background: var(--line); grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
@@ -253,6 +259,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   <div class="main">
     <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
     <div class="board" id="board">
+      <div class="cabtabs" id="cabTabs" role="tablist" aria-label="Cabinets in this project"></div>
       <div class="cmdbar" id="cmdBar" hidden>
         <div class="cmdhist" id="cmdHist" aria-live="polite"></div>
         <div class="cmdline"><label for="cmdIn" id="cmdPrompt">Command:</label><input type="text" id="cmdIn" autocomplete="off" autocapitalize="off" spellcheck="false"></div>

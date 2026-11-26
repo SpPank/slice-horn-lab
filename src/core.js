@@ -340,21 +340,22 @@
       let Zm = cx(c.Rms, w * c.Mmd - 1 / (w * c.Cms));
       if (c.fdd && c.fdd.Ams > 0) Zm = add(Zm, cx(1 / (w * c.fdd.Ams)));
       const Zmt = add(Zm, div(cx(c.Bl * c.Bl), Ze));
-      const Is = div(cx(c.Sd * c.Bl * eg), mul(Ze, Zmt));
+      const eg1 = eg * (o.raw.drive != null ? o.raw.drive : 1);   // drive: 0 = not driven (coil shorted by the amp), for one way of a multi-way box
+      const Is = div(cx(c.Sd * c.Bl * eg1), mul(Ze, Zmt));
       const Yd = div(cx(c.Sd * c.Sd), Zmt);
       addY(o.fi, o.fi, Yd); addY(o.ri, o.ri, Yd); addY(o.fi, o.ri, neg(Yd)); addY(o.ri, o.fi, neg(Yd));
       b[o.fi] = add(b[o.fi], Is); b[o.ri] = sub(b[o.ri], Is);
-      return { Ze, Zmt, c };
+      return { Ze, Zmt, c, eg1 };
     });
 
     const p = solveLinear(A, b, N);
 
     let Itot = cx(0);
     const drv = P.drivers.map((o, k) => {
-      const { Ze, Zmt, c } = dstate[k];
+      const { Ze, Zmt, c, eg1 } = dstate[k];
       const dp = sub(p[o.fi], p[o.ri]);
-      const u = div(sub(div(cx(c.Bl * eg), Ze), scl(dp, c.Sd)), Zmt); // cone velocity
-      const i = div(sub(cx(eg), scl(u, c.Bl)), Ze);
+      const u = div(sub(div(cx(c.Bl * eg1), Ze), scl(dp, c.Sd)), Zmt); // cone velocity
+      const i = div(sub(cx(eg1), scl(u, c.Bl)), Ze);
       Itot = add(Itot, i);
       return { u, i, x: div(u, cx(0, w)), pf: p[o.fi], pr: p[o.ri] };
     });

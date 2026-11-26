@@ -63,6 +63,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .helpbody .bad { color: var(--bad); }
 .helpbody a { color: var(--accent); }
 .tools hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.cabtabs { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; font-size: 12px; }
+.cabtabs button { padding: 3px 10px; border-radius: var(--r, 5px); }
+.cabtabs button.cab.on { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
+.cabtabs button.x { padding: 1px 6px; margin-left: -3px; opacity: .7; }
+.cabtabs .grow { flex: 1; }
+.cabtabs label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
 .board { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 /* viewports: the side-view drawing (Right) plus WebGL views (Top, Perspective, Front), laid out like Rhino's 4View */
 .vps { flex: 1 1 auto; min-height: 0; display: grid; gap: 2px; background: var(--line); grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
@@ -260,6 +266,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   <div class="main">
     <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
     <div class="board" id="board">
+      <div class="cabtabs" id="cabTabs" role="tablist" aria-label="Cabinets in this project"></div>
       <div class="cmdbar" id="cmdBar" hidden>
         <div class="cmdhist" id="cmdHist" aria-live="polite"></div>
         <div class="cmdline"><label for="cmdIn" id="cmdPrompt">Command:</label><input type="text" id="cmdIn" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
@@ -693,21 +700,22 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       let Zm = cx(c.Rms, w * c.Mmd - 1 / (w * c.Cms));
       if (c.fdd && c.fdd.Ams > 0) Zm = add(Zm, cx(1 / (w * c.fdd.Ams)));
       const Zmt = add(Zm, div(cx(c.Bl * c.Bl), Ze));
-      const Is = div(cx(c.Sd * c.Bl * eg), mul(Ze, Zmt));
+      const eg1 = eg * (o.raw.drive != null ? o.raw.drive : 1);   // drive: 0 = not driven (coil shorted by the amp), for one way of a multi-way box
+      const Is = div(cx(c.Sd * c.Bl * eg1), mul(Ze, Zmt));
       const Yd = div(cx(c.Sd * c.Sd), Zmt);
       addY(o.fi, o.fi, Yd); addY(o.ri, o.ri, Yd); addY(o.fi, o.ri, neg(Yd)); addY(o.ri, o.fi, neg(Yd));
       b[o.fi] = add(b[o.fi], Is); b[o.ri] = sub(b[o.ri], Is);
-      return { Ze, Zmt, c };
+      return { Ze, Zmt, c, eg1 };
     });
 
     const p = solveLinear(A, b, N);
 
     let Itot = cx(0);
     const drv = P.drivers.map((o, k) => {
-      const { Ze, Zmt, c } = dstate[k];
+      const { Ze, Zmt, c, eg1 } = dstate[k];
       const dp = sub(p[o.fi], p[o.ri]);
-      const u = div(sub(div(cx(c.Bl * eg), Ze), scl(dp, c.Sd)), Zmt); // cone velocity
-      const i = div(sub(cx(eg), scl(u, c.Bl)), Ze);
+      const u = div(sub(div(cx(c.Bl * eg1), Ze), scl(dp, c.Sd)), Zmt); // cone velocity
+      const i = div(sub(cx(eg1), scl(u, c.Bl)), Ze);
       Itot = add(Itot, i);
       return { u, i, x: div(u, cx(0, w)), pf: p[o.fi], pr: p[o.ri] };
     });
@@ -2072,6 +2080,9 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   let design;
   const undo = [], redo = [];
   function snapshot() { return JSON.stringify(design); }
+  // ---- a project holds several cabinets (a sub and a top, say), each a full design with its own width, drivers and DSP.
+  // `design` is always the one on screen; the others wait in proj.cabs. Each keeps its own undo history.
+  const proj = { cabs: [], active: 0, hist: [], stack: true };
   function commit() { undo.push(snapshot()); if (undo.length > 120) undo.shift(); redo.length = 0; }
   function doUndo() { if (!undo.length) return; if (cmd) endCmd(); redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = []; changed(); renderSnap(); }
   function doRedo() { if (!redo.length) return; if (cmd) endCmd(); undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = []; changed(); renderSnap(); }
@@ -2505,6 +2516,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     const xs = [], ys = [];
     for (const p of design.panels) { xs.push(p.x1, p.x2); ys.push(p.y1, p.y2); }
     for (const p of design.paths) for (const q of p.pts) { xs.push(q.x); ys.push(q.y); }
+    for (const o of (typeof proj !== 'undefined' ? otherCabs() : [])) for (const q of o.quads) for (const v of q) { xs.push(v.x); ys.push(v.y); }
     if (!xs.length) { xs.push(-200, 1000); ys.push(-200, 800); }
     fitBox(Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys));
     view.auto = true;   // still framed as fitted: a resize re-fits until the user pans or zooms
@@ -3882,7 +3894,8 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     design.paths = [...manual, ...fresh];
     fresh.forEach((q) => { if (!q.name) q.name = nextPathName(); });
   }
-  function changed() { sliding = false; syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
+  function saveProject() { proj.cabs[proj.active] = design; LS.set('shl.project', JSON.stringify({ cabs: proj.cabs.map((d, i) => (i === proj.active ? null : d)), active: proj.active, stack: proj.stack, names: proj.cabs.map((d) => d.name) })); }
+  function changed() { sliding = false; syncArcsIn(design); syncDrivers(); regenAutoPaths(); analyse(); draw(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => { LS.set('shl.design', JSON.stringify(design)); saveProject(); }, 400); renderCabTabs(); }
   function liveChanged() { if (liveRaf) return; liveRaf = requestAnimationFrame(() => { liveRaf = 0; syncArcsIn(design); syncDrivers(); if (design.autoPaths && performance.now() - lastAuto > 180 && !(drag && drag.kind === 'vert')) regenAutoPaths(); analyse(); draw(); }); }
   let flashTimer = null;
   function flash(msg) { const h = $('hint'); h.textContent = msg; h.style.color = 'var(--accent)'; clearTimeout(flashTimer); flashTimer = setTimeout(() => { h.style.color = ''; h.textContent = hintOf(tool); }, 2600); }
@@ -3919,6 +3932,16 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       ctx.imageSmoothingEnabled = view.k * g.c < 3;
       if (MX() < 0) { ctx.save(); ctx.translate(sx + g.nx * g.c * view.k, sy); ctx.scale(-1, 1); ctx.drawImage(regionImg, 0, 0, g.nx * g.c * view.k, g.ny * g.c * view.k); ctx.restore(); }
       else ctx.drawImage(regionImg, sx, sy, g.nx * g.c * view.k, g.ny * g.c * view.k);
+    }
+    // the project's other cabinets: same space, faded, not editable here (click their tab to edit them)
+    for (const o of otherCabs()) {
+      ctx.save(); ctx.globalAlpha = 0.32; let lx = Infinity, ly = -Infinity, rx = -Infinity;
+      for (const q of o.quads) {
+        ctx.beginPath(); q.forEach((v, i) => { const [x, y] = w2s(v.x, v.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); lx = Math.min(lx, x); rx = Math.max(rx, x); ly = Math.max(ly, y); }); ctx.closePath();
+        ctx.fillStyle = o.d.material === 'mdf' ? C.mdf : C.birch; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.stroke();
+      }
+      ctx.restore();
+      if (isFinite(lx)) { ctx.fillStyle = C.muted; ctx.font = `11.5px ${C.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(`${o.d.name || 'Cabinet'} (its tab to edit)`, (lx + rx) / 2, ly + 6); }
     }
     // panels
     const mat = design.material === 'mdf' ? { f: C.mdf, e: C['mdf-edge'] } : { f: C.birch, e: C['birch-edge'] };
@@ -4388,6 +4411,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       base.yLabel = `dB SPL @ 1 m, ${driveLabel(pwrW)}`; base.series.push({ x: f, y: up(R.spl), color: C.accent, width: 2.2, label: 'This design', over: ov });
       if (ov) base.bands = overBands(f, ov);
       if (dspActive()) base.series.push({ x: f, y: up(R.splRaw), color: C.accent, width: 1, dash: [4, 3], label: 'Unfiltered' });
+      const stk = stackSeries(up); if (stk.length) { base.series[0].label = design.name || 'This cabinet'; base.series.push(...stk); }
       overlays().forEach((p) => base.series.unshift({ x: p.f, y: up(p.spl), color: p.col, dash: p.dash, width: 1.4, label: p.name }));
       if (design.target && design.target.pts.length >= 2) {
         const [tl, th] = targetBand(), tf = HC.logFreqs(tl, th, 60);
@@ -4395,7 +4419,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
         base.series.push({ x: tf, y: tf.map((x) => targetAt(x) + toff), color: C.warn, width: 2, dash: [7, 4], label: design.target.level ? 'Target' : 'Target (shape)' });
         base.handles = design.target.pts.map((p) => ({ f: p[0], db: p[1] + toff }));
       }
-      const m = Math.max(...R.spl.filter((_, i) => f[i] >= f0 && f[i] <= f1).map((v) => v + dB), ...(design.target ? design.target.pts.map((p) => p[1] + dB) : [])); base.ymax = Math.ceil((m + 4) / 5) * 5; base.ymin = base.ymax - 50;
+      const m = Math.max(...R.spl.filter((_, i) => f[i] >= f0 && f[i] <= f1).map((v) => v + dB), ...stk.map((sr) => Math.max(...sr.y.filter((v, i) => f[i] >= f0 && f[i] <= f1 && isFinite(v)))), ...(design.target ? design.target.pts.map((p) => p[1] + dB) : [])); base.ymax = Math.ceil((m + 4) / 5) * 5; base.ymin = base.ymax - 50;
       if (dspActive() && showDspCurve) {
         const xs = HC.logFreqs(Math.max(5, f0), f1, 240);
         base.series2 = { x: xs, y: xs.map((x) => 20 * Math.log10(HC.abs(xoverH(x)) + 1e-12)), color: C.ok, label: 'DSP filter', unit: ' dB',
@@ -4634,7 +4658,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
     return `<div class="dspbar"><div class="dsphead"><span class="tunettl">DSP</span><button id="dspFlat" title="Zero all six PEQ bands">Flat EQ</button><button id="dspOff" title="Bypass every filter">Bypass all</button><label class="row note"><input type="checkbox" id="dspCurve" ${showDspCurve ? 'checked' : ''}> curve</label></div>
       <div class="dspgrid">${pass('hp', 'HPF', d.hp)}${pass('lp', 'LPF', d.lp)}${d.peq.map(band).join('')}</div></div>`;
   }
-  function dspChanged() { applyDsp(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => LS.set('shl.design', JSON.stringify(design)), 400); }
+  function dspChanged() { applyDsp(); refreshSide(); clearTimeout(saveTimer); saveTimer = setTimeout(() => { LS.set('shl.design', JSON.stringify(design)); saveProject(); }, 400); renderCabTabs(); }
   function bindDspBar() {
     document.querySelectorAll('.dspc').forEach((card) => card.querySelectorAll('[data-f]').forEach((el) => {
       el.onchange = () => {
@@ -5155,12 +5179,13 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   const fileSafe = (s) => (s || 'design').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_');
   $('btnFile').onclick = () => modal(`
     <h3 style="margin:0">File</h3>
-    <div class="row"><button id="mSave" class="primary">Download design (.json)</button><button id="mCopy">Copy design JSON</button><button id="mOpen">Open .json / import .wdr…</button></div>
+    <div class="row"><button id="mSave" class="primary">${proj.cabs.length > 1 ? `Download project, ${proj.cabs.length} cabinets (.json)` : 'Download design (.json)'}</button>${proj.cabs.length > 1 ? '<button id="mSaveOne">Download this cabinet only</button>' : ''}<button id="mCopy">Copy design JSON</button><button id="mOpen">Open .json / import .wdr…</button></div>
     <div class="row"><button id="mDxf">Download side profile (.dxf)</button><button id="mCut">Cut list</button><button id="mReport">Hornresp cross-check numbers</button><button id="mCsv">Download response (.csv)</button></div>
     <label class="note">Paste a design JSON here to load it:</label><textarea id="mPaste" placeholder='{"name": ...}'></textarea>
     <div class="row"><button id="mLoadPaste">Load pasted design</button></div>
     <div class="note">Your work also autosaves in this browser. Driver files: WinISD .wdr files can be imported and are added to this design.</div>`, (m, close) => {
-    m.querySelector('#mSave').onclick = () => download(fileSafe(design.name) + '.json', JSON.stringify(design, null, 1), 'application/json');
+    m.querySelector('#mSave').onclick = () => { proj.cabs[proj.active] = design; if (proj.cabs.length > 1) download(fileSafe(proj.cabs.map((d) => d.name).join(' + ')) + '.json', JSON.stringify({ app: 'slice-horn-lab-project', active: proj.active, stack: proj.stack, cabs: proj.cabs }, null, 1), 'application/json'); else download(fileSafe(design.name) + '.json', JSON.stringify(design, null, 1), 'application/json'); };
+    if (m.querySelector('#mSaveOne')) m.querySelector('#mSaveOne').onclick = () => download(fileSafe(design.name) + '.json', JSON.stringify(design, null, 1), 'application/json');
     m.querySelector('#mCopy').onclick = (e) => copyText(JSON.stringify(design), e.target);
     m.querySelector('#mOpen').onclick = () => { $('fileIn').click(); close(); };
     m.querySelector('#mDxf').onclick = () => download(fileSafe(design.name) + '_profile.dxf', toDXF(), 'application/dxf');
@@ -5358,6 +5383,10 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   }
 
   function loadDesign(d) {
+    if (d && Array.isArray(d.cabs) && d.cabs.length && d.cabs.every((c) => c && Array.isArray(c.panels))) {   // a whole project
+      commit(); proj.cabs = d.cabs.map((c) => Object.assign(baseDesign('Cabinet'), c)); proj.hist = []; proj.stack = d.stack !== false;
+      proj.active = Math.max(0, Math.min(proj.cabs.length - 1, d.active || 0)); design = proj.cabs[proj.active]; undo.length = 0; redo.length = 0; showCab(); return;
+    }
     if (!d || !Array.isArray(d.panels)) throw new Error('bad');
     commit(); design = Object.assign(baseDesign('Untitled'), d); if (!SNAPS[design.snap]) design.snap = design.units === 'in' ? 'in01' : 'mm'; sel = []; refit3d(); fit(); changed(); setPickerText(); renderSnap(); renderViewSide();
   }
@@ -5534,6 +5563,11 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
       const hl = H3.hull(pts);
       if (hl.length >= 3) for (const [k, x0, x1] of [['side:a', -t, 0], ['side:b', W, W + t]]) objs.push({ key: k, mesh: H3.prism(hl, x0, x1), color: wood, edge, alpha: UI.sides === 'ghost' ? 0.13 : 1, nopick: true });
     }
+    for (const o of otherCabs()) {   // the project's other cabinets, see-through, centred on the same middle plane
+      const off = (W - (o.d.W || W)) / 2, w2 = o.d.W || W, t2 = o.d.t || t, all = [];
+      for (const q0 of o.quads) { const q = q0.map((v) => [v.x, v.y]); all.push(...q); objs.push({ key: 'other:' + o.i, mesh: H3.board(q, off, off + w2), color: wood, edge, alpha: 0.35, nopick: true }); }
+      if (all.length >= 3 && UI.sides !== 'hide') { const hl = H3.hull(all); if (hl.length >= 3) for (const [x0, x1] of [[off - t2, off], [off + w2, off + w2 + t2]]) objs.push({ key: 'other:' + o.i, mesh: H3.prism(hl, x0, x1), color: wood, edge, alpha: 0.18, nopick: true }); }
+    }
     for (const d of design.drivers) {
       const loc = driverLocal(d), body = new H3.Mesh(), cone = new H3.Mesh(), c = [d.x, d.y], n = [d.nx, d.ny];
       const cz0 = loc.cone[0][1], cz1 = loc.cone[2][1], r0 = loc.cone[1][0], r1 = loc.cone[2][0], rin = loc.dm.cutout / 2;
@@ -5564,7 +5598,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   }
   function sync3dNow() {
     const shown = shownVps().filter((id) => id !== '2d'); if (!design || !shown.length) return;
-    const sig = JSON.stringify([design.panels, design.drivers, design.drivers.map((d) => { const m = driverDims(d.key); return [m.outer, m.depth, m.cutout]; }), design.W, design.t, design.material, sel, UI.mode3d, UI.sides, C.bg, C.accent, unit()]);
+    const sig = JSON.stringify([proj.cabs.map((d, i) => (i === proj.active ? 0 : [d.panels, d.W, d.t])), design.panels, design.drivers, design.drivers.map((d) => { const m = driverDims(d.key); return [m.outer, m.depth, m.cutout]; }), design.W, design.t, design.material, sel, UI.mode3d, UI.sides, C.bg, C.accent, unit()]);
     const dirty = sig !== sig3; sig3 = sig;
     if (dirty) VPS.forEach((v) => { v.stale = true; });
     let objs = null;
@@ -6019,12 +6053,114 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   def('Help', [], 'How to use it', () => setHelp(true), { transparent: true });
   def('Classic', [], 'Switch back to the classic controls', () => setControls('classic'), { norepeat: true });
 
+  // ---------------------------------------------------------------- cabinets (tabs) and how they stack up
+  function renderCabTabs() {
+    const el = $('cabTabs'); if (!el) return;
+    proj.cabs[proj.active] = design;
+    el.innerHTML = proj.cabs.map((d, i) => `<button class="cab ${i === proj.active ? 'on' : ''}" role="tab" aria-selected="${i === proj.active}" data-i="${i}" title="${i === proj.active ? 'Double-click to rename' : 'Switch to this cabinet'}">${esc(d.name || 'Cabinet ' + (i + 1))}</button>${proj.cabs.length > 1 ? `<button class="x" data-x="${i}" title="Remove this cabinet from the project" aria-label="Remove ${esc(d.name || 'cabinet')}">×</button>` : ''}`).join('') +
+      `<button id="cabAdd" title="Add a cabinet to this project">+ Cabinet</button><span class="grow"></span>` +
+      (proj.cabs.length > 1 ? `<label title="Draw every cabinet and their sum on the SPL graph"><input type="checkbox" id="cabStack" ${proj.stack ? 'checked' : ''}> Show the stack on SPL</label>` : '');
+    el.querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => switchCab(+b.dataset.i); b.ondblclick = () => { if (+b.dataset.i !== proj.active) return; const n = prompt('Cabinet name', design.name || ''); if (n != null && n.trim()) { commit(); design.name = n.trim(); changed(); } }; });
+    el.querySelectorAll('[data-x]').forEach((b) => b.onclick = () => delCab(+b.dataset.x));
+    $('cabAdd').onclick = addCab;
+    if ($('cabStack')) $('cabStack').onchange = (e) => { proj.stack = e.target.checked; saveProject(); drawChart(); refreshLegend(); };
+  }
+  function showCab() { sel = []; if (cmd) endCmd(); refit3d(); fit(); changed(); setPickerText(); renderSnap(); renderViewSide(); }
+  function parkHist() { proj.hist[proj.active] = { u: undo.splice(0), r: redo.splice(0) }; }
+  function takeHist() { const h = proj.hist[proj.active]; if (h) { undo.push(...h.u); redo.push(...h.r); } }
+  function switchCab(i) {
+    if (i === proj.active || !proj.cabs[i]) return;
+    proj.cabs[proj.active] = design; parkHist();
+    proj.active = i; design = proj.cabs[i]; takeHist();
+    showCab();
+  }
+  function addCab() {
+    modal(`<h3 style="margin:0">Add a cabinet</h3><div class="note">Each cabinet has its own boards, width, drivers and DSP. They share one space: the new one is placed on top of the others, and the others show faded while you edit it. Select all (Ctrl+A) and move to place it somewhere else.</div>
+      <div class="row"><button id="aCopy" class="primary">Copy of “${esc(design.name)}”</button><button id="aBlank">Blank</button></div>
+      <label class="note">Or start from a preset:</label><div class="row"><select id="aPre">${$('preset').innerHTML}</select></div>`, (m, close) => {
+      const add = (d) => {
+        const top = proj.cabs.reduce((m, c, i) => { const b = boxOf(i === proj.active ? design : c); return b && b.y1 > m.y1 ? b : m; }, { y1: -Infinity }), me = boxOf(design), b = boxOf(d);
+        if (top && me && b && isFinite(top.y1)) shiftDesign(d, (me.x0 + me.x1) / 2 - (b.x0 + b.x1) / 2, top.y1 - b.y0);   // stacked on top, centred
+        proj.cabs[proj.active] = design; parkHist(); proj.cabs.push(d); proj.active = proj.cabs.length - 1; design = d; close(); showCab(); flash(`Added “${d.name}”. Double-click its tab to rename it.`); };
+      m.querySelector('#aCopy').onclick = () => { const d = JSON.parse(JSON.stringify(design)); d.name = (design.name || 'Cabinet') + ' copy'; add(d); };
+      m.querySelector('#aBlank').onclick = () => add(Object.assign(baseDesign('Cabinet ' + (proj.cabs.length + 1)), { W: design.W, t: design.t, snap: design.snap }));   // (a blank one has no boards, so nothing to move)
+      m.querySelector('#aPre').onchange = (e) => { if (e.target.value) add(makePreset(e.target.value)); };
+    });
+  }
+  function delCab(i) {
+    if (proj.cabs.length < 2) return;
+    if (!confirm(`Remove “${proj.cabs[i].name}” from this project? Download the project first if you want to keep it.`)) return;
+    proj.cabs[proj.active] = design;
+    if (i === proj.active) { proj.cabs.splice(i, 1); proj.hist.splice(i, 1); proj.active = Math.min(i, proj.cabs.length - 1); design = proj.cabs[proj.active]; undo.length = 0; redo.length = 0; takeHist(); showCab(); return; }
+    proj.cabs.splice(i, 1); proj.hist.splice(i, 1); if (i < proj.active) proj.active--;
+    saveProject(); renderCabTabs(); drawChart(); refreshLegend();
+  }
+  /** the other cabinets' boards as outlines, for drawing them around the one being edited. They share its space. */
+  const otherQ = new Map();
+  function otherCabs() {
+    const out = [];
+    proj.cabs.forEach((d, i) => {
+      if (i === proj.active || !d || !d.panels) return;
+      const key = JSON.stringify([d.panels, d.t, d.arcs]); let q = otherQ.get(i);
+      if (!q || q.key !== key) {
+        let quads = []; try { HG.computeJoints(d); quads = d.panels.map((p) => HG.panelQuad(p, d.t)); } catch (e) { quads = []; }
+        q = { key, quads }; otherQ.set(i, q);
+      }
+      out.push({ d, i, quads: q.quads });
+    });
+    if (out.length) try { HG.computeJoints(design); } catch (e) { }   // the joints are kept per call: put this cabinet's back
+    return out;
+  }
+  /** move a whole cabinet in the side view (boards, curved boards, dividers, air paths, drivers) */
+  function shiftDesign(d, dx, dy) {
+    const r = (v) => Math.round(v * 100) / 100;
+    for (const p of d.panels || []) { p.x1 = r(p.x1 + dx); p.y1 = r(p.y1 + dy); p.x2 = r(p.x2 + dx); p.y2 = r(p.y2 + dy); }
+    for (const p of d.boundaries || []) { p.x1 = r(p.x1 + dx); p.y1 = r(p.y1 + dy); p.x2 = r(p.x2 + dx); p.y2 = r(p.y2 + dy); }
+    for (const g of d.arcs || []) for (const k of ['a', 'm', 'b']) if (g[k]) g[k] = { x: r(g[k].x + dx), y: r(g[k].y + dy) };
+    for (const p of d.paths || []) p.pts = (p.pts || []).map((q) => ({ ...q, x: r(q.x + dx), y: r(q.y + dy) }));
+    for (const v of d.drivers || []) { v.x = r(v.x + dx); v.y = r(v.y + dy); }
+    if (d.target && d.target.pts) { /* frequencies, not positions */ }
+  }
+  const boxOf = (d) => { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (const p of d.panels || []) { const h = (p.t || d.t || 18) / 2; x0 = Math.min(x0, p.x1 - h, p.x2 - h); x1 = Math.max(x1, p.x1 + h, p.x2 + h); y0 = Math.min(y0, p.y1 - h, p.y2 - h); y1 = Math.max(y1, p.y1 + h, p.y2 + h); } return isFinite(x0) ? { x0, x1, y0, y1 } : null; };
+  /** another cabinet's pressure response (with its own DSP and drive), on the same frequencies as R. Cached. */
+  const cabResp = new Map();
+  function respOf(d) {
+    const key = JSON.stringify(d); if (cabResp.has(key)) return cabResp.get(key);
+    const keep = design; let out = null;
+    try {
+      design = d;   // driver lookups (custom drivers) read the design on screen
+      const A2 = HG.analyse(d, libFn);
+      if (A2.net && A2.net.drivers.length) { const P2 = HC.prepare(A2.net), dsp = dspOf(d); out = { H: FREQS.map((f) => HC.mul(HC.solveAt(P2, f).pff, HC.dspH(dsp, f))) }; }
+    } catch (e) { console.warn('cabinet', d.name, e); out = null; } finally { design = keep; }
+    if (cabResp.size > 20) cabResp.clear();
+    cabResp.set(key, out); return out;
+  }
+  const STACK_COL = ['#c2620a', '#1f8a4c', '#8a72b5', '#b56f80', '#5f9e8a'];
+  /** series for the SPL graph: every other cabinet, and the sum of all of them (pressures added: same spot, no delay) */
+  function stackSeries(up) {
+    if (proj.cabs.length < 2 || !proj.stack || !R || !R.H) return [];
+    const out = [], sum = R.H.slice(); let k = 0;
+    proj.cabs.forEach((d, i) => {
+      if (i === proj.active) return;
+      const r = respOf(d); if (!r) return;
+      r.H.forEach((h, j) => { sum[j] = HC.add(sum[j], h); });
+      out.push({ x: R.f, y: up(r.H.map((h) => 20 * Math.log10(HC.abs(h) / 2e-5 + 1e-20))), color: STACK_COL[k++ % STACK_COL.length], width: 1.6, label: d.name || 'Cabinet ' + (i + 1) });
+    });
+    if (out.length) out.push({ x: R.f, y: up(sum.map((h) => 20 * Math.log10(HC.abs(h) / 2e-5 + 1e-20))), color: C.ink || C.text || '#888', width: 2.6, label: 'Stack: all cabinets together' });
+    return out;
+  }
+
   // ---------------------------------------------------------------- boot
   $('preset').onchange = (e) => { if (!e.target.value) return; commit(); design = makePreset(e.target.value); e.target.value = ''; sel = []; refit3d(); fit(); changed(); setPickerText(); renderSnap(); renderViewSide(); renderViewSide(); };
   $('btnUndo').onclick = doUndo; $('btnRedo').onclick = doRedo;
   const saved = LS.get('shl.design');
   try { design = saved ? Object.assign(baseDesign('Untitled'), JSON.parse(saved)) : null; } catch (e) { design = null; }
   if (!design) design = makePreset(DEF ? 'default' : 'th');
+  try {   // the other cabinets of the project (the one on screen is shl.design)
+    const pj = JSON.parse(LS.get('shl.project') || 'null');
+    if (pj && Array.isArray(pj.cabs) && pj.cabs.length > 1 && pj.cabs[pj.active] === null) { proj.cabs = pj.cabs.map((d, i) => (i === pj.active ? design : Object.assign(baseDesign('Cabinet'), d))); proj.active = pj.active; proj.stack = pj.stack !== false; }
+  } catch (e) { /* one cabinet */ }
+  if (!proj.cabs.length) proj.cabs = [design];
   if (!SNAPS[design.snap]) design.snap = design.units === 'in' ? 'in01' : 'mm';
   if (design.showLabels == null) design.showLabels = true;
   if (design.autoPaths == null) design.autoPaths = true;
@@ -6045,7 +6181,7 @@ details.adv summary { cursor: pointer; font-size: 12px; color: var(--muted); tex
   if (RH()) echo('Rhino-style controls are on. Type a command (M, Co, Ro, Mi, L, ZS, ZE ...) and press Enter.');
   new ResizeObserver(resize).observe($('vp2d'));
   new ResizeObserver(() => { const cr = chartCv.getBoundingClientRect(); chartCv.width = Math.round(cr.width * view.dpr); chartCv.height = Math.round(cr.height * view.dpr); drawChart(); }).observe(chartCv);
-  analyse(); resize();
+  analyse(); resize(); renderCabTabs();
   window.SHL = { quantizeBuild, quantizeIn, get design() { return design; }, get A() { return A; }, get R() { return R; }, changed, w2s, s2w, hit: (x, y) => hit(...s2w(x, y)), moveDriverTo, driverHits, get drag() { return drag; },
     makePreset,   // the built-in designs, for other local tools (the 3D Modeler lists and opens them)
     UI, runCmd, setControls, setLayout, get sel() { return sel; }, set sel(v) { sel = v; refreshSide(); draw(); }, get cmd() { return cmd; }, get view3d() { return VPS.map((v) => ({ id: v.id, v3: v.v3 })); } };
