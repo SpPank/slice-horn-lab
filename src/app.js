@@ -4047,5 +4047,6 @@
   new ResizeObserver(() => { const cr = chartCv.getBoundingClientRect(); chartCv.width = Math.round(cr.width * view.dpr); chartCv.height = Math.round(cr.height * view.dpr); drawChart(); }).observe(chartCv);
   analyse(); resize();
   window.SHL = { quantizeBuild, quantizeIn, get design() { return design; }, get A() { return A; }, get R() { return R; }, changed, w2s, s2w, hit: (x, y) => hit(...s2w(x, y)), moveDriverTo, driverHits, get drag() { return drag; },
+    makePreset,   // the built-in designs, for other local tools (the 3D Modeler lists and opens them)
     UI, runCmd, setControls, setLayout, get sel() { return sel; }, set sel(v) { sel = v; refreshSide(); draw(); }, get cmd() { return cmd; }, get view3d() { return VPS.map((v) => ({ id: v.id, v3: v.v3 })); } };
 })();
