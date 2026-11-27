@@ -99,13 +99,27 @@ Chart tabs above the graph:
 | **Group delay** | How late each frequency arrives (ms). |
 | **Step / impulse** | Time response: how cleanly it starts and stops. Long tails mean stored energy. |
 | **Decay** | Waterfall (CSD). Long bright streaks are resonances that keep ringing. |
-| **Air velocity** | Port/mouth air speed, with a 17 m/s port-noise guide. |
-| **Max SPL** | Highest output before hitting the thermal (Pe) or excursion (Xmax) limit. |
+| **Air velocity** | Peak air speed in each port (at its narrowest point) or horn mouth, with that port's own noise ("chuffing") limit as a dashed line in the same colour. Past the limit the curve turns **red** and the line under the legend gives the range. See *Port noise limits* below. |
+| **Max SPL** | Highest output before hitting the thermal (Pe), excursion (Xmax) or port-noise limit. |
 | **Flare** | Cross-section area along each air path. |
 
 **Hover** any chart for exact values. **Pin curve** keeps the current curve as a grey overlay so you can compare a change. The range menu picks 20–500 Hz, 20–1k or 20–2k.
 
 The stats boxes give passband level, −3/−6 dB points, the low hump, peak excursion, minimum impedance, max SPL and the air path length and areas.
+
+### Port noise limits
+
+Two ports on the same cabinet don't share one speed limit, so each gets its own. Air starts tearing off a port's edges (vortices, heard as chuffing) once it travels far each cycle compared with the port's size, so the speed a port can take **rises with the frequency it works at and with its narrow dimension** (a Strouhal-number rule: limit = 2π·f × c × slot height). A low-tuned port in a 6th-order bandpass chuffs at a lower speed than the high-tuned one, even when both are the same size.
+
+The **Port edges** bar on the Air velocity tab sets how each port's ends are finished:
+
+| Edges | What it means | Limit for a 50 mm slot at 40 Hz |
+|---|---|---|
+| **Square-cut** (default) | plain board edges | 10 m/s (Young's figure for straight ports) |
+| **Rounded** | about a ¾" roundover on both ends | 17 m/s (the common guide) |
+| **Flared** | a smooth flare at both ends | about 32 m/s (~10 dB more than straight; Bezzola et al. measured 10–16 dB) |
+
+Short paths and vents into a chamber are judged at their narrowest point, because the same air passes all along them; long horn paths are judged at the mouth. It's a rule of thumb for where noise starts, not a flow simulation.
 
 ---
 

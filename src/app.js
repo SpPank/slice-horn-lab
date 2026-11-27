@@ -655,6 +655,8 @@
       out.ra.push(zn.r); out.xa.push(zn.i);
     }
     out.radLabels = Pp.radiators.map((r) => r.label);
+    out.ports = portInfo(Pp.radiators);
+    out.ports.forEach((p, k) => { if (p && p.k !== 1) { out.velRaw.forEach((a) => { a[k] *= p.k; }); out.vel.forEach((a) => { a[k] *= p.k; }); } });
     // group delay
     out.gd = groupDelay(out.f, out.H);
     // max SPL
@@ -662,14 +664,18 @@
     const n = design.drivers.reduce((a, d) => a + (d.n || 1), 0);
     const Pe = (spec.Pe || 0) * n, Xmax = spec.Xmax || 0, eg = design.eg || 2.83;
     const Rec = hr0.Re;
-    out.maxTh = []; out.maxX = []; out.maxSpl = [];
+    out.maxTh = []; out.maxX = []; out.maxPort = []; out.maxSpl = [];
+    const hasPort = out.ports.some(Boolean);
     for (let i = 0; i < FREQS.length; i++) {
       const vTh = Pe > 0 ? Math.sqrt(Pe * Rec) : Infinity;
       const vX = Xmax > 0 ? eg * Xmax / Math.max(1e-9, out.xRaw[i]) : Infinity;
+      let vP = Infinity;   // drive voltage at which the first port reaches its noise limit
+      out.ports.forEach((p, k) => { if (p) vP = Math.min(vP, eg * portLimit(p, FREQS[i]) / Math.max(1e-9, out.velRaw[i][k])); });
       const base = out.splRaw[i] - 20 * Math.log10(eg);
       out.maxTh.push(isFinite(vTh) ? base + 20 * Math.log10(vTh) : NaN);
       out.maxX.push(isFinite(vX) ? base + 20 * Math.log10(vX) : NaN);
-      out.maxSpl.push(base + 20 * Math.log10(Math.min(vTh, vX)));
+      out.maxPort.push(hasPort && isFinite(vP) ? base + 20 * Math.log10(vP) : NaN);
+      out.maxSpl.push(base + 20 * Math.log10(Math.min(vTh, vX, vP)));
     }
     out.Pe = Pe; out.Xmax = Xmax; out.n = n; out.Re = Rec; out.eg = eg;
     R = out;
@@ -692,6 +698,38 @@
     R.spl = R.spl.map((v) => v + dB); R.splRaw = R.splRaw.map((v) => v + dB); R.H = R.H.map((h) => HC.scl(h, k)); if (R.Hraw) R.Hraw = R.Hraw.map((h) => HC.scl(h, k)); if (R.velRaw) R.velRaw = R.velRaw.map((a) => a.map((v) => v * k));
     R.x = R.x.map((v) => v * k); R.xRaw = R.xRaw.map((v) => v * k); R.vel = R.vel.map((a) => a.map((v) => v * k)); R.eg *= k;
   }
+  // ---- port noise ("chuffing") limit, one per port.
+  // Air peels off a port's edges once its stroke per cycle (v / ω) gets long compared with the port's size
+  // (a Strouhal criterion, St = ωL / v; Peters, Roozen et al.). So the speed a port can take before it chuffs
+  // rises with the frequency it works at and with its narrow dimension h:  v_lim = ω · c · h, capped.
+  // c is calibrated so a 50 mm square-cut slot at 40 Hz gives Young's 10 m/s for straight ports; rounded ends
+  // give the usual 17 m/s guide there, and a proper flare about 10 dB more than straight (Bezzola et al. 2019
+  // found 10–16 dB). A rule of thumb for where noise starts, not a flow simulation.
+  const EDGES = {
+    square: { c: 0.8, cap: 30, name: 'Square-cut', tip: 'plain board edges at both ends' },
+    round: { c: 1.35, cap: 40, name: 'Rounded', tip: 'about a ¾" (19 mm) roundover on both ends' },
+    flare: { c: 2.5, cap: 60, name: 'Flared', tip: 'a smooth flare at both ends, radius about the slot height or more' },
+  };
+  const edgeOf = (pid) => { const p = design.paths.find((q) => q.id === pid); return (p && EDGES[p.edge]) ? p.edge : 'square'; };
+  const portLimit = (p, f) => { const E = EDGES[edgeOf(p.pid)]; return Math.min(E.cap, 2 * Math.PI * f * E.c * p.h); };
+  /** per radiator: the path it belongs to, where its speed is measured and the size that sets its limit (null for cones) */
+  function portInfo(rads) {
+    const W = design.W;
+    return rads.map((r) => {
+      const m = /path (\d+) (start|end)/.exec(r.label || ''); if (!m) return null;
+      const P = (A.paths || []).find((q) => q.src.id === +m[1]); if (!P) return null;
+      const len = (P.sB - P.sA) || P.m.L;
+      // a short path or a vent into a chamber carries the same air all along, so it is fastest at its narrowest
+      // point; a long horn path is judged at its mouth
+      const port = len <= 500 || (P.ends || []).some((e) => e.endCorr);
+      const inside = P.m.samples.filter((q) => q.s >= P.sA - 1 && q.s <= P.sB + 1 && q.h > 0);
+      const hMin = inside.length ? Math.min(...inside.map((q) => q.h)) : r.S * 1e6 / W;
+      const hAt = port ? hMin : r.S * 1e6 / W;
+      return { pid: P.src.id, port, k: port ? clamp(r.S / (hAt * W / 1e6), 1, 50) : 1, h: Math.min(hAt, W) / 1000, hMm: hAt };
+    });
+  }
+  /** speed / limit per radiator at each frequency, at the current power */
+  const portRatio = (k, kv) => R.f.map((f, i) => R.vel[i][k] * kv / portLimit(R.ports[k], f));
   /** peak excursion as a fraction of Xmax (null without Xmax) */
   const overRatio = (k) => (R && R.Xmax ? R.x.map((v) => v * k / R.Xmax) : null);
   /** frequency runs where the cone passes Xmax, edges interpolated on the log axis */
@@ -719,6 +757,24 @@
         : `<span style="color:${C.ok || C.accent}">within Xmax · peak ${(pk * R.Xmax).toFixed(1)} of ${R.Xmax} mm</span>`);
     }
     if (R.Pe && W > R.Pe * 1.0001) bits.push(`<span style="color:${C.warn}">above the ${fmtW(R.Pe)} rating</span>`);
+    return bits.join(' · ');
+  }
+  /** Air velocity tab: each port's peak speed against its own limit at the current power */
+  function portStatus() {
+    if (!R || !R.ports || !R.ports.some(Boolean)) return `${egAt(pwrW).toFixed(1)} V into ${R ? R.Re.toFixed(2) : '?'} Ω · no ports or mouths to check`;
+    const kv = Math.sqrt(pwrW), [f0, f1] = fRange(), hz = (v) => (v < 100 ? v.toFixed(0) : (+v.toPrecision(2)).toFixed(0));
+    const bits = [`${egAt(pwrW).toFixed(1)} V into ${R.Re.toFixed(2)} Ω`];
+    R.ports.forEach((p, k) => {
+      if (!p) return;
+      const ov = portRatio(k, kv), name = `Path ${esc(nameOf(p.pid))} ${p.port ? 'port' : 'mouth'}`;
+      let bi = -1; R.f.forEach((f, i) => { if (f >= f0 && f <= f1 && (bi < 0 || R.vel[i][k] > R.vel[bi][k])) bi = i; });
+      if (bi < 0) return;
+      const pk = R.vel[bi][k] * kv, lim = portLimit(p, R.f[bi]);
+      const runs = overBands(R.f, ov).filter(([a, b]) => b >= f0 && a <= f1);
+      bits.push(runs.length
+        ? `<span style="color:${C.bad}">${name} chuffs ${runs.map(([a, b]) => `${hz(Math.max(a, f0))}–${hz(Math.min(b, f1))}`).join(', ')} Hz · peak ${pk.toFixed(1)} m/s at ${hz(R.f[bi])} Hz, limit there ${lim.toFixed(0)}</span>`
+        : `<span style="color:${C.ok || C.accent}">${name} OK · peak ${pk.toFixed(1)} m/s at ${hz(R.f[bi])} Hz, limit there ${lim.toFixed(0)}</span>`);
+    });
     return bits.join(' · ');
   }
   /** The low response hump: first local maximum above 20 Hz that is within 6 dB of the top of the curve (< 150 Hz). */
@@ -2437,13 +2493,26 @@
       const vals = R.gd.filter((_, i) => f[i] >= Math.max(f0, 15) && f[i] <= f1); base.ymin = Math.min(0, Math.floor(Math.min(...vals) / 5) * 5); base.ymax = Math.max(10, Math.ceil(Math.max(...vals) / 5) * 5);
     } else if (tab === 'vel') {
       base.yLabel = `m/s peak @ ${driveLabel(pwrW)}`;
-      R.radLabels.forEach((lb, k) => base.series.push({ x: f, y: R.vel.map((v) => v[k] * Math.sqrt(pwrW)), color: k ? C.driver : C.accent, width: 2, label: prettyRad(lb) }));
-      base.hlines = [{ y: 17, color: C.warn, label: '17 m/s port-noise guide' }]; base.ymin = 0;
+      const kv = Math.sqrt(pwrW); let anyOver = [];
+      R.radLabels.forEach((lb, k) => {
+        const p = R.ports[k], pi = p ? (A.paths || []).findIndex((q) => q.src.id === p.pid) : -1;
+        const col = pi >= 0 ? pathColor(pi) : k ? C.driver : C.accent;
+        const nm = p && p.port ? `${prettyRad(lb).replace(/ (mouth|start)$/, '')} port` : prettyRad(lb);
+        if (p) base.series.push({ x: f, y: f.map((fq) => portLimit(p, fq)), color: col, width: 1, dash: [5, 4], label: `${nm} limit (${EDGES[edgeOf(p.pid)].name.toLowerCase()})` });
+        const ov = p ? portRatio(k, kv) : null;
+        if (ov) anyOver = anyOver.length ? anyOver.map((v, i) => Math.max(v, ov[i])) : ov;
+        base.series.push({ x: f, y: R.vel.map((v) => v[k] * kv), color: col, width: 2, label: p && p.port ? `${nm} (narrowest)` : nm, over: ov });
+      });
+      if (anyOver.some((v) => v > 1)) base.bands = overBands(f, anyOver);
+      base.ymin = 0;
+      const top = Math.max(...R.vel.flatMap((v, i) => (f[i] >= fRange()[0] && f[i] <= fRange()[1] ? v.map((x) => x * kv) : [0])));
+      base.ymax = Math.max(20, Math.ceil(top * 1.25 / 5) * 5);
     } else if (tab === 'max') {
       base.yLabel = 'dB SPL @ 1 m';
       base.series.push({ x: f, y: R.maxSpl, color: C.accent, width: 2.4, label: 'Max SPL' });
       if (R.Pe) base.series.push({ x: f, y: R.maxTh, color: C.warn, width: 1, dash: [4, 3], label: `Thermal (${R.Pe} W)` });
       if (R.Xmax) base.series.push({ x: f, y: R.maxX, color: C.bad, width: 1, dash: [4, 3], label: `Xmax (${R.Xmax} mm)` });
+      if (R.maxPort.some(isFinite)) base.series.push({ x: f, y: R.maxPort, color: C.driver, width: 1, dash: [2, 3], label: 'Port noise' });
       overlays().forEach((p) => p.max && base.series.unshift({ x: p.f, y: p.max, color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       const m = Math.max(...R.maxSpl.filter((v, i) => isFinite(v) && f[i] >= f0 && f[i] <= f1)); base.ymax = Math.ceil((m + 4) / 5) * 5; base.ymin = base.ymax - 40;
       if (!R.Pe && !R.Xmax) base.note = 'Set Pe and Xmax for the driver to see limits.';
@@ -2682,7 +2751,7 @@
     const parts = [];
     if (cfg && cfg.series) cfg.series.slice().reverse().forEach((s) => parts.push(`<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`));
     if (cfg && cfg.series2 && cfg.series2.legend) parts.push(`<span><i style="background:${cfg.series2.color}"></i>${cfg.series2.legend}</span>`);
-    if (cfg && cfg.bands) parts.push(`<span><i style="background:${C.bad}"></i>Over Xmax</span>`);
+    if (cfg && cfg.bands) parts.push(`<span><i style="background:${C.bad}"></i>${tab === 'vel' ? 'Over the chuff limit' : 'Over Xmax'}</span>`);
     if (tab === 'decay') parts.push('<span>Long bright streaks = ringing (pipe or chamber resonance).</span>');
     if (tab === 'step') parts.push(`<span>${dspActive() ? 'Through the DSP filters' : 'Unfiltered (DSP off)'} · time from amplifier.</span>`);
     const pc = $('pwrCol'), showP = !!(R && R.Re), pwrTab = ['spl', 'exc', 'vel'].includes(tab);   // always on the left; it changes SPL, excursion and air velocity
@@ -2694,13 +2763,25 @@
           <div class="pticks"><span>10k</span><span>1k</span><span>100</span><span>10</span><span>1</span></div></div>`;
       $('pwrRange').value = Math.log10(pwrW).toFixed(3); $('pwrNum').value = +pwrW.toPrecision(3);
       pc.classList.toggle('idle', !pwrTab); pc.title = pwrTab ? '' : 'Power has no effect on this tab (the model is linear); it applies to SPL, Excursion and Air velocity.';
-      if (pwrTab) parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${powerStatus()}</span></div>`);
+      if (pwrTab) parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${tab === 'vel' ? portStatus() : powerStatus()}</span></div>`);
     }
     parts.push(`<span style="flex:1"></span><button id="pinBtn" title="Keep this curve as a grey overlay to compare against">Pin curve</button>${pins.length || ghostOn() ? `<button id="clrPins">${pins.length ? 'Clear pins' : 'Clear before'}</button>` : ''}`);
     const dspTabs = ['spl', 'exc', 'gd', 'step', 'decay', 'vel'];
     parts.push(`<select id="fRangeSel" aria-label="Frequency range"><option value="20,500">20–500 Hz</option><option value="20,1000">20–1k Hz</option><option value="20,2000">20–2k Hz</option></select>`);
     const lower = [];   // DSP bar and target live at the top of the scrolling part of the panel
     if (R && dspTabs.includes(tab)) lower.push(dspBarHtml());
+    if (R && tab === 'vel' && R.ports.some(Boolean)) {
+      const seen = new Set(), rows = [];
+      R.ports.forEach((p) => {
+        if (!p || seen.has(p.pid)) return; seen.add(p.pid);
+        const e = edgeOf(p.pid), nm = nameOf(p.pid);
+        rows.push(`<label class="row" title="How the ends of path ${esc(nm)} are finished. Rounded or flared ends let the air turn without tearing off the edge, so the port takes more speed before it chuffs.">Path ${esc(nm)} ${p.port ? 'port' : 'mouth'} ends
+          <select data-edge="${p.pid}">${Object.entries(EDGES).map(([k, E]) => `<option value="${k}" ${k === e ? 'selected' : ''} title="${E.tip}">${E.name}</option>`).join('')}</select>
+          <span class="note">${p.port ? 'narrowest' : 'mouth'} ${fmtL(p.hMm)} × ${fmtL(design.W)}</span></label>`);
+      });
+      lower.push(`<div class="tunebar"><span class="tunettl">Port edges</span>${rows.join('')}
+        <span class="note" title="A port can take more air speed the higher the frequency it works at and the bigger its narrow dimension, because the air travels less far per cycle compared with the port's size (Strouhal number). Calibrated to Young's 10 m/s for a straight square-cut port (a 50 mm slot at 40 Hz); rounded ends give the common 17 m/s there, a proper flare about 10 dB more than straight (Bezzola et al. found 10–16 dB). It marks where noise starts, roughly; it is not a flow simulation.">Each dashed line is that port's own noise limit: it rises with frequency and slot size. Hover for how it's worked out.</span></div>`);
+    }
     if (tab === 'spl') {
       const T = design.target, run = !!tuneJob;
       lower.push(`<div class="tunebar"><span class="tunettl">Target</span>
@@ -2721,12 +2802,16 @@
     if ($('tgLevel')) $('tgLevel').onchange = (e) => { design.target.level = e.target.checked; refreshLegend(); };
     if ($('tgRun')) $('tgRun').onclick = () => autoTune();
     if ($('tgStop')) $('tgStop').onclick = () => { if (tuneJob) tuneJob.stop = true; };
+    document.querySelectorAll('#legend2 select[data-edge]').forEach((s) => { s.onchange = () => {
+      const p = design.paths.find((q) => q.id === +s.dataset.edge); if (!p) return;
+      commit(); p.edge = s.value; changed();
+    }; });
     const pr = $('pwrRange');
     if (pr) {
       const setW = (W, fromSlider) => {
         pwrW = clamp(W, 1, 10000);
         $('pwrNum').value = +pwrW.toPrecision(3); if (!fromSlider) pr.value = Math.log10(pwrW).toFixed(3);
-        if ($('pwrStat')) $('pwrStat').innerHTML = powerStatus(); const b = document.querySelector('.pwrstat b'); if (b) b.textContent = 'Power ' + fmtW(pwrW); drawChart();
+        if ($('pwrStat')) $('pwrStat').innerHTML = tab === 'vel' ? portStatus() : powerStatus(); const b = document.querySelector('.pwrstat b'); if (b) b.textContent = 'Power ' + fmtW(pwrW); drawChart();
       };
       pr.oninput = () => setW(+Math.pow(10, +pr.value).toPrecision(2), true);
       $('pwrNum').onchange = (e) => { const v = parseFloat(String(e.target.value).replace(/k/i, 'e3')); if (v > 0) setW(v, false); };
