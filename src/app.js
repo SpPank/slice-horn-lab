@@ -678,6 +678,12 @@
       out.maxSpl.push(base + 20 * Math.log10(Math.min(vTh, vX, vP)));
     }
     out.Pe = Pe; out.Xmax = Xmax; out.n = n; out.Re = Rec; out.eg = eg;
+    out.Xlim = spec.Xlim > Xmax ? spec.Xlim : 0; out.XlimK = spec.XlimK || 'Xlim';
+    // nominal impedance of what the amp sees: the datasheet's, else the standard value that fits Re (Re ≈ 0.6–0.95 × nominal)
+    const s0 = specOf(drv0.id != null && design.drivers.find((q) => q.id === drv0.id) ? design.drivers.find((q) => q.id === drv0.id).key : design.drivers[0].key) || spec;
+    const z1 = s0.Z > 0 ? s0.Z : [2, 4, 8, 16].reduce((b, N) => (Math.abs(Math.log(s0.Re / N / 0.75)) < Math.abs(Math.log(s0.Re / b / 0.75)) ? N : b), 4);
+    const nn = Math.max(1, drv0.n | 0);
+    out.Znom = +(drv0.wiring === 'series' ? z1 * nn : z1 / nn).toPrecision(3);
     R = out;
     const e1 = +Math.sqrt(Rec).toFixed(4);   // reference drive: 1 W into Re
     if (!design.ref1W) { shiftTarget(20 * Math.log10(e1 / eg)); design.ref1W = true; }   // older designs kept the target at their own voltage
@@ -688,9 +694,16 @@
   // ---- drive level: the model is linear, so a new power just rescales every response (no re-solve)
   const fmtW = (w) => w >= 1000 ? (+(w / 1000).toPrecision(w >= 10000 ? 3 : 2)) + ' kW' : w >= 10 ? Math.round(w) + ' W' : (+w.toPrecision(2)) + ' W';
   let pwrW = 1;   // SPL-tab power, view only: every stored result is at 1 W into Re
-  const egAt = (W) => Math.sqrt(W * (R && R.Re ? R.Re : 8));
+  // Watts on the Power slider mean V² / Z. Amplifiers are rated into the nominal load (4 or 8 Ω), so that is the
+  // default; 'Re' is Hornresp's convention (more watts for the same volts, since Re is below nominal).
+  let pwrRef = LS.get('shl.pwrRef') === 're' ? 're' : 'nom';
+  const zPwr = () => (R && R.Re ? (pwrRef === 're' ? R.Re : R.Znom || R.Re) : 8);
+  const zLabel = () => (R && R.Re ? (pwrRef === 're' ? `${R.Re.toFixed(2)} Ω (Re)` : `${R.Znom} Ω nominal`) : '');
+  const egAt = (W) => Math.sqrt(W * zPwr());
+  /** voltage factor from the stored results (1 W into Re) to the slider's power */
+  const kAmp = () => (R && R.Re ? Math.sqrt(pwrW * zPwr() / R.Re) : Math.sqrt(pwrW));
   const driveLabel = (W) => (R && R.Re ? `${fmtW(W)} (${egAt(W).toFixed(2)} V)` : `${design.eg} V`);
-  const pdB = () => (tab === 'spl' ? 10 * Math.log10(pwrW) : 0);
+  const pdB = () => (tab === 'spl' ? 20 * Math.log10(kAmp()) : 0);
   function shiftTarget(dB) { if (design.target && dB) design.target.pts = design.target.pts.map((q) => [q[0], +(q[1] + dB).toFixed(2)]); }
   /** the model is linear: a new drive voltage just rescales every response */
   function scaleR(k) {
@@ -746,8 +759,8 @@
   }
   function powerStatus() {
     if (!R) return '';
-    const W = pwrW, bits = [`${egAt(W).toFixed(1)} V into ${R.Re.toFixed(2)} Ω`];
-    const r = overRatio(Math.sqrt(W));
+    const W = pwrW, bits = [`${egAt(W).toFixed(1)} V into ${zLabel()}`];
+    const r = overRatio(kAmp());
     if (!r) bits.push(`<span style="color:${C.warn}">set the driver's Xmax to see over-excursion</span>`);
     else {
       const [f0, f1] = fRange(), runs = overBands(R.f, r).filter(([a, b]) => b >= f0 && a <= f1);
@@ -755,15 +768,17 @@
       const hz = (v) => (v < 100 ? v.toFixed(0) : (+v.toPrecision(2)).toFixed(0));
       bits.push(runs.length ? `<span style="color:${C.bad}">over Xmax ${runs.map(([a, b]) => `${hz(Math.max(a, f0))}–${hz(Math.min(b, f1))}`).join(', ')} Hz · peak ${(pk * R.Xmax).toFixed(1)} mm (${pk.toFixed(1)}× Xmax)</span>`
         : `<span style="color:${C.ok || C.accent}">within Xmax · peak ${(pk * R.Xmax).toFixed(1)} of ${R.Xmax} mm</span>`);
+      if (R.Xlim && pk * R.Xmax > R.Xlim) bits.push(`<b style="color:${C.bad}">past ${R.XlimK} ${R.Xlim} mm: ${R.XlimK === 'Xdamage' ? 'damage' : 'mechanical'} risk</b>`);
+      else if (R.Xlim && runs.length) bits.push(`<span>${R.XlimK} ${R.Xlim} mm not reached</span>`);
     }
     if (R.Pe && W > R.Pe * 1.0001) bits.push(`<span style="color:${C.warn}">above the ${fmtW(R.Pe)} rating</span>`);
     return bits.join(' · ');
   }
   /** Air velocity tab: each port's peak speed against its own limit at the current power */
   function portStatus() {
-    if (!R || !R.ports || !R.ports.some(Boolean)) return `${egAt(pwrW).toFixed(1)} V into ${R ? R.Re.toFixed(2) : '?'} Ω · no ports or mouths to check`;
-    const kv = Math.sqrt(pwrW), [f0, f1] = fRange(), hz = (v) => (v < 100 ? v.toFixed(0) : (+v.toPrecision(2)).toFixed(0));
-    const bits = [`${egAt(pwrW).toFixed(1)} V into ${R.Re.toFixed(2)} Ω`];
+    if (!R || !R.ports || !R.ports.some(Boolean)) return `${egAt(pwrW).toFixed(1)} V into ${zLabel()} · no ports or mouths to check`;
+    const kv = kAmp(), [f0, f1] = fRange(), hz = (v) => (v < 100 ? v.toFixed(0) : (+v.toPrecision(2)).toFixed(0));
+    const bits = [`${egAt(pwrW).toFixed(1)} V into ${zLabel()}`];
     R.ports.forEach((p, k) => {
       if (!p) return;
       const ov = portRatio(k, kv), name = `Path ${esc(nameOf(p.pid))} ${p.port ? 'port' : 'mouth'}`;
@@ -2455,7 +2470,7 @@
     const f = R.f, [f0, f1] = fRange();
     const base = { xlog: true, xmin: f0, xmax: f1, series: [] };
     if (tab === 'spl') {
-      const dB = pdB(), ov = overRatio(Math.sqrt(pwrW)), up = (a) => a.map((v) => v + dB);
+      const dB = pdB(), ov = overRatio(kAmp()), up = (a) => a.map((v) => v + dB);
       base.yLabel = `dB SPL @ 1 m, ${driveLabel(pwrW)}`; base.series.push({ x: f, y: up(R.spl), color: C.accent, width: 2.2, label: 'This design', over: ov });
       if (ov) base.bands = overBands(f, ov);
       if (dspActive()) base.series.push({ x: f, y: up(R.splRaw), color: C.accent, width: 1, dash: [4, 3], label: 'Unfiltered' });
@@ -2479,10 +2494,11 @@
       overlays().forEach((p) => base.series.unshift({ x: p.f, y: p.ze, color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'exc') {
-      const kx = Math.sqrt(pwrW), ov = overRatio(kx);
+      const kx = kAmp(), ov = overRatio(kx);
       base.yLabel = `mm peak @ ${driveLabel(pwrW)}`; base.series.push({ x: f, y: R.x.map((v) => v * kx), color: C.accent, width: 2, label: 'Cone excursion', over: ov });
       if (ov) base.bands = overBands(f, ov);
-      if (R.Xmax) base.hlines = [{ y: R.Xmax, color: C.bad, label: `Xmax ${R.Xmax} mm` }];
+      if (R.Xmax) base.hlines = [{ y: R.Xmax, color: C.bad, label: `Xmax ${R.Xmax} mm (end of the linear range)` }];
+      if (R.Xlim) base.hlines.push({ y: R.Xlim, color: C.ink, label: `${R.XlimK} ${R.Xlim} mm (${R.XlimK === 'Xdamage' ? 'damage' : 'mechanical limit'})` });
       overlays().forEach((p) => base.series.unshift({ x: p.f, y: p.x.map((v) => v * kx), color: p.col, dash: p.dash, width: 1.2, label: p.name }));
       base.ymin = 0;
     } else if (tab === 'load') {
@@ -2493,7 +2509,7 @@
       const vals = R.gd.filter((_, i) => f[i] >= Math.max(f0, 15) && f[i] <= f1); base.ymin = Math.min(0, Math.floor(Math.min(...vals) / 5) * 5); base.ymax = Math.max(10, Math.ceil(Math.max(...vals) / 5) * 5);
     } else if (tab === 'vel') {
       base.yLabel = `m/s peak @ ${driveLabel(pwrW)}`;
-      const kv = Math.sqrt(pwrW); let anyOver = [];
+      const kv = kAmp(); let anyOver = [];
       R.radLabels.forEach((lb, k) => {
         const p = R.ports[k], pi = p ? (A.paths || []).findIndex((q) => q.src.id === p.pid) : -1;
         const col = pi >= 0 ? pathColor(pi) : k ? C.driver : C.accent;
@@ -2760,7 +2776,9 @@
       if (!$('pwrRange')) pc.innerHTML = `<span class="pttl">Power</span>
         <span class="pnum"><input type="text" id="pwrNum" title="Type a wattage (2.5k works)">W</span>
         <div class="ptrack"><input type="range" id="pwrRange" min="0" max="4" step="0.005" title="Amplifier power into Re, 1 W to 10 kW (log scale). Applies to SPL, Excursion and Air velocity.">
-          <div class="pticks"><span>10k</span><span>1k</span><span>100</span><span>10</span><span>1</span></div></div>`;
+          <div class="pticks"><span>10k</span><span>1k</span><span>100</span><span>10</span><span>1</span></div></div>
+        <select id="pwrRef" class="pref" aria-label="What the watts are measured into" title="Watts into the driver's nominal impedance, as amplifiers are rated (so the slider matches your amp's spec), or into Re, the voice coil's DC resistance (Hornresp's convention: the same watts mean fewer volts)."><option value="nom"></option><option value="re">into Re</option></select>`;
+      const zo = $('pwrRef').options[0]; zo.textContent = `into ${R.Znom} Ω`; $('pwrRef').value = pwrRef;
       $('pwrRange').value = Math.log10(pwrW).toFixed(3); $('pwrNum').value = +pwrW.toPrecision(3);
       pc.classList.toggle('idle', !pwrTab); pc.title = pwrTab ? '' : 'Power has no effect on this tab (the model is linear); it applies to SPL, Excursion and Air velocity.';
       if (pwrTab) parts.push(`<div class="pwrstat"><b>Power ${fmtW(pwrW)}</b> · <span id="pwrStat">${tab === 'vel' ? portStatus() : powerStatus()}</span></div>`);
@@ -2814,6 +2832,7 @@
         if ($('pwrStat')) $('pwrStat').innerHTML = tab === 'vel' ? portStatus() : powerStatus(); const b = document.querySelector('.pwrstat b'); if (b) b.textContent = 'Power ' + fmtW(pwrW); drawChart();
       };
       pr.oninput = () => setW(+Math.pow(10, +pr.value).toPrecision(2), true);
+      $('pwrRef').onchange = (e) => { pwrRef = e.target.value === 're' ? 're' : 'nom'; LS.set('shl.pwrRef', pwrRef); drawChart(); refreshLegend(); };
       $('pwrNum').onchange = (e) => { const v = parseFloat(String(e.target.value).replace(/k/i, 'e3')); if (v > 0) setW(v, false); };
     }
     bindDspBar();
@@ -3040,7 +3059,7 @@
       const s = specOf(d.key) || {}, di = A && A.driverInfo && A.driverInfo.find((q) => q.d.id === d.id);
       const side = (sd) => !sd ? '—' : sd.kind === 'air' ? '<span class="pill air">open air</span>' : sd.kind === 'chamber' ? `<span class="pill ch">chamber ${A.regions[sd.label] ? fmtV(A.regions[sd.label].Vnet) : ''}</span>` : sd.kind === 'path' ? `<span class="pill path">path ${nameOf(sd.path)} at ${fmtL(sd.s)}</span>` : '<span class="pill bad">blocked by a board</span>';
       const ts = HC.driverToTS(hrOf(d.key) || { Sd: 855, Mmd: 200, Cms: 1e-4, Rms: 5, Re: 5, Bl: 20 });
-      const fields = [['Fs', 'Hz'], ['Qes', ''], ['Qms', ''], ['Vas', 'L'], ['Re', 'Ω'], ['Le', 'mH'], ['Sd', 'cm²'], ['Mms', 'g'], ['Bl', 'T·m'], ['Xmax', 'mm'], ['Pe', 'W']];
+      const fields = [['Fs', 'Hz'], ['Qes', ''], ['Qms', ''], ['Vas', 'L'], ['Re', 'Ω'], ['Le', 'mH'], ['Sd', 'cm²'], ['Mms', 'g'], ['Bl', 'T·m'], ['Xmax', 'mm'], ['Xlim', 'mm'], ['Pe', 'W'], ['Z', 'Ω nominal']];
       h += `<h3>Driver <span class="pill">${esc(label(s))}</span></h3>
         <div class="note">Front → ${side(di && di.front)} &nbsp; Rear → ${side(di && di.rear)}</div>
         <div class="grid2">

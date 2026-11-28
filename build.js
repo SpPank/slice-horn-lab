@@ -40,7 +40,7 @@ if (fs.existsSync(pe)) {
       const tag = d.source === 'spec_sheet' ? 'PE spec sheet' : 'PE product page';
       const Qes = d.Qes || (d.Qts && d.Qms ? 1 / (1 / d.Qts - 1 / d.Qms) : undefined);
       lib.push({ k: `PE:${d.brand} ${d.model}${d.source === 'spec_sheet' ? ' [sheet]' : ''}`, b: d.brand, m: d.model + (d.source === 'spec_sheet' ? ' (spec sheet)' : ''), src: tag,
-        Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, url: d.url, dims: d.dims || undefined,
+        Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, Z: d.nominal_ohms || undefined, Xlim: d.Xlim_mm || d.Xdamage_mm || undefined, XlimK: d.Xlim_mm ? 'Xlim' : d.Xdamage_mm ? 'Xdamage' : undefined, url: d.url, dims: d.dims || undefined,
         size: d.size_in || undefined, prof: peProf(d.sku),
         mag: /neodymium|\bneo\b/i.test(d.pe_title || '') ? 'neo' : /ferrite/i.test(d.pe_title || '') ? 'ferrite' : undefined });
       peCount++;
@@ -63,7 +63,7 @@ if (fs.existsSync(mfr)) {
       if (seen.has(k)) continue; seen.add(k);
       const Qes = d.Qes || (d.Qts && d.Qms ? 1 / (1 / d.Qts - 1 / d.Qms) : undefined);
       lib.push({ k, b: d.brand, m: model + (d.discontinued ? ' (discontinued)' : ''), src: `${d.brand} datasheet`,
-        Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, url: d.url, dims: d.dims || undefined,
+        Fs: d.Fs, Qes, Qms: d.Qms, Vas: d.Vas_L, Re: d.Re, Le: d.Le_mH, Sd: d.Sd_cm2, Mms: d.Mms_g, Bl: d.Bl, Xmax: d.Xmax_mm, Pe: d.Pe_W, Z: d.nominal_ohms || undefined, Xlim: d.Xlim_mm || d.Xdamage_mm || undefined, XlimK: d.Xlim_mm ? 'Xlim' : d.Xdamage_mm ? 'Xdamage' : undefined, url: d.url, dims: d.dims || undefined,
         size: d.size_in || undefined, mag: d.mag || undefined,
         prof: d.prof || (d.drawing_file ? profFor('sheets_mfr/' + path.basename(d.drawing_file)) : undefined) });   // d.prof: an outline read off the drawing by hand
       mfrCount++;

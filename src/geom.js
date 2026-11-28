@@ -766,7 +766,15 @@
             const S0 = e.S; const rho = (root.HornCore || {}).AIR ? root.HornCore.AIR.rho : 1.205;
             net.lumped.push({ a: cn, b: nid, Z: (w) => ({ r: 0, i: w * rho * dl / S0 }) });
             if (!chamberPorts.has(e.label)) chamberPorts.set(e.label, []);
-            chamberPorts.get(e.label).push({ S: e.S, Leff: (P.sB - P.sA) / 1000 + dl + 0.8488 * a, path: P.src.id });
+            // acoustic mass / rho of the whole port, from its measured profile (a tapered slot tunes lower
+            // than one the size of its inner end): integral ds/S + inner end correction + the far end's
+            const smp = P.m.samples.filter((q) => q.s >= P.sA - 1e-6 && q.s <= P.sB + 1e-6 && q.h > 0);
+            let m = 0;
+            for (let j = 1; j < smp.length; j++) m += ((smp[j].s - smp[j - 1].s) / 1000) * 2 / ((smp[j].h + smp[j - 1].h) * W / 1e6);
+            if (!(m > 0)) m = (P.sB - P.sA) / 1000 / S0;
+            const far = P.ends[1 - k], Sf = far && far.S > 0 ? far.S : S0;
+            m += dl / S0 + 0.8488 * Math.sqrt(Sf / Math.PI) / Sf;
+            chamberPorts.get(e.label).push({ S: e.S, Leff: e.S * m, path: P.src.id });
           } else unite(nid, cn);
         } else if (e.kind === 'path') unite(nid, nodeAt(e.path, e.s));
       });
